@@ -19,16 +19,16 @@
 
 /**
  * SECTION:element-coloreffects
+ * @title: coloreffects
  *
  * Map colors of the video input to a lookup table
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 -v videotestsrc ! coloreffects preset=heat ! videoconvert !
  *     autovideosink
  * ]| This pipeline shows the effect of coloreffects on a test stream.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -590,10 +590,10 @@ gst_color_effects_class_init (GstColorEffectsClass * klass)
       "Color Look-up Table filter",
       "Filippo Argiolas <filippo.argiolas@gmail.com>");
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_color_effects_sink_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_color_effects_src_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_color_effects_sink_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_color_effects_src_template);
 }
 
 static void

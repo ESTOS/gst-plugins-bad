@@ -20,17 +20,17 @@
  */
 /**
  * SECTION:element-wavescope
+ * @title: wavescope
  * @see_also: goom
  *
  * Wavescope is a simple audio visualisation element. It renders the waveforms
  * like on an oscilloscope.
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 audiotestsrc ! audioconvert ! wavescope ! ximagesink
  * ]|
- * </refsect2>
+ *
  */
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -39,15 +39,17 @@
 #include <stdlib.h>
 #include "gstwavescope.h"
 
+#if G_BYTE_ORDER == G_BIG_ENDIAN
+#define RGB_ORDER "xRGB"
+#else
+#define RGB_ORDER "BGRx"
+#endif
+
 static GstStaticPadTemplate gst_wave_scope_src_template =
 GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-#if G_BYTE_ORDER == G_BIG_ENDIAN
-    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE ("xRGB"))
-#else
-    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE ("BGRx"))
-#endif
+    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE (RGB_ORDER))
     );
 
 static GstStaticPadTemplate gst_wave_scope_sink_template =
@@ -146,10 +148,10 @@ gst_wave_scope_class_init (GstWaveScopeClass * g_class)
       "Waveform oscilloscope", "Visualization", "Simple waveform oscilloscope",
       "Stefan Kost <ensonic@users.sf.net>");
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_wave_scope_src_template));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_wave_scope_sink_template));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &gst_wave_scope_src_template);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &gst_wave_scope_sink_template);
 }
 
 static void

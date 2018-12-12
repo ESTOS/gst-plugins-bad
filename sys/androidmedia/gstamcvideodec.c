@@ -328,6 +328,8 @@ caps_to_mime (GstCaps * caps)
     return "video/hevc";
   } else if (strcmp (name, "video/x-vp8") == 0) {
     return "video/x-vnd.on2.vp8";
+  } else if (strcmp (name, "video/x-vp9") == 0) {
+    return "video/x-vnd.on2.vp9";
   } else if (strcmp (name, "video/x-divx") == 0) {
     return "video/mp4v-es";
   }
@@ -680,7 +682,8 @@ _find_nearest_frame (GstAmcVideoDec * self, GstClockTime reference_timestamp)
       best_id = id;
 
       /* For frames without timestamp we simply take the first frame */
-      if ((reference_timestamp == 0 && timestamp == 0) || diff == 0)
+      if ((reference_timestamp == 0 && !GST_CLOCK_TIME_IS_VALID (timestamp))
+          || diff == 0)
         break;
     }
   }
@@ -1030,8 +1033,8 @@ _gl_sync_render_unlocked (struct gl_sync *sync)
   if (!af_meta) {
     GST_WARNING ("Failed to retreive the transformation meta from the "
         "gl_sync %p buffer %p", sync, sync->buffer);
-  } else if (gst_amc_surface_texture_get_transform_matrix (sync->
-          surface->texture, matrix, &error)) {
+  } else if (gst_amc_surface_texture_get_transform_matrix (sync->surface->
+          texture, matrix, &error)) {
 
     gst_video_affine_transformation_meta_apply_matrix (af_meta, matrix);
     gst_video_affine_transformation_meta_apply_matrix (af_meta, yflip_matrix);
@@ -1305,18 +1308,23 @@ retry:
       " flags 0x%08x", idx, buffer_info.offset, buffer_info.size,
       buffer_info.presentation_time_us, buffer_info.flags);
 
+  buf = gst_amc_codec_get_output_buffer (self->codec, idx, &err);
+  if (err) {
+    if (self->flushing) {
+      g_clear_error (&err);
+      goto flushing;
+    }
+    goto failed_to_get_output_buffer;
+  }
+
+  if (self->codec_config != AMC_CODEC_CONFIG_WITH_SURFACE && !buf)
+    goto got_null_output_buffer;
+
   frame =
       _find_nearest_frame (self,
       gst_util_uint64_scale (buffer_info.presentation_time_us, GST_USECOND, 1));
 
   is_eos = ! !(buffer_info.flags & BUFFER_FLAG_END_OF_STREAM);
-
-  buf = gst_amc_codec_get_output_buffer (self->codec, idx, &err);
-  if (err)
-    goto failed_to_get_output_buffer;
-
-  if (self->codec_config != AMC_CODEC_CONFIG_WITH_SURFACE && !buf)
-    goto got_null_output_buffer;
 
   if (frame
       && (deadline =
@@ -1354,7 +1362,8 @@ retry:
           (GST_GL_MEMORY_ALLOCATOR_NAME));
 
       params = gst_gl_video_allocation_params_new (self->gl_context, NULL,
-          &state->info, 0, NULL, GST_GL_TEXTURE_TARGET_EXTERNAL_OES);
+          &state->info, 0, NULL, GST_GL_TEXTURE_TARGET_EXTERNAL_OES,
+          GST_GL_RGBA);
 
       self->oes_mem = (GstGLMemory *) gst_gl_base_memory_alloc (base_mem_alloc,
           (GstGLAllocationParams *) params);
@@ -1589,9 +1598,7 @@ flow_error:
           gst_event_new_eos ());
       gst_pad_pause_task (GST_VIDEO_DECODER_SRC_PAD (self));
     } else if (flow_ret < GST_FLOW_EOS) {
-      GST_ELEMENT_ERROR (self, STREAM, FAILED,
-          ("Internal data stream error."), ("stream stopped, reason %s",
-              gst_flow_get_name (flow_ret)));
+      GST_ELEMENT_FLOW_ERROR (self, flow_ret);
       gst_pad_push_event (GST_VIDEO_DECODER_SRC_PAD (self),
           gst_event_new_eos ());
       gst_pad_pause_task (GST_VIDEO_DECODER_SRC_PAD (self));
@@ -1967,6 +1974,8 @@ gst_amc_video_dec_set_format (GstVideoDecoder * decoder,
           gst_video_codec_state_unref (prev_output_state);
         }
       }
+
+      gst_caps_unref (downstream_caps);
     }
   }
 
@@ -2406,41 +2415,13 @@ static gboolean
 gst_amc_video_dec_src_query (GstVideoDecoder * bdec, GstQuery * query)
 {
   GstAmcVideoDec *self = GST_AMC_VIDEO_DEC (bdec);
-  gboolean ret;
 
   switch (GST_QUERY_TYPE (query)) {
     case GST_QUERY_CONTEXT:
     {
-      const gchar *context_type;
-      GstContext *context, *old_context;
-
-      ret = gst_gl_handle_context_query ((GstElement *) self, query,
-          &self->gl_display, &self->other_gl_context);
-      gst_query_parse_context_type (query, &context_type);
-
-      if (g_strcmp0 (context_type, "gst.gl.local_context") == 0) {
-        GstStructure *s;
-
-        gst_query_parse_context (query, &old_context);
-
-        if (old_context)
-          context = gst_context_copy (old_context);
-        else
-          context = gst_context_new ("gst.gl.local_context", FALSE);
-
-        s = gst_context_writable_structure (context);
-        gst_structure_set (s, "context", GST_GL_TYPE_CONTEXT, self->gl_context,
-            NULL);
-        gst_query_set_context (query, context);
-        gst_context_unref (context);
-
-        ret = self->gl_context != NULL;
-      }
-      GST_LOG_OBJECT (self, "context query of type %s %i", context_type, ret);
-
-      if (ret)
-        return ret;
-
+      if (gst_gl_handle_context_query ((GstElement *) self, query,
+              self->gl_display, self->gl_context, self->other_gl_context))
+        return TRUE;
       break;
     }
     default:
@@ -2475,31 +2456,9 @@ _caps_are_rgba_with_gl_memory (GstCaps * caps)
 static gboolean
 _find_local_gl_context (GstAmcVideoDec * self)
 {
-  GstQuery *query;
-  GstContext *context;
-  const GstStructure *s;
-
-  if (self->gl_context)
+  if (gst_gl_query_local_gl_context (GST_ELEMENT (self), GST_PAD_SRC,
+          &self->gl_context))
     return TRUE;
-
-  query = gst_query_new_context ("gst.gl.local_context");
-  if (!self->gl_context
-      && gst_gl_run_query (GST_ELEMENT (self), query, GST_PAD_SRC)) {
-    gst_query_parse_context (query, &context);
-    if (context) {
-      s = gst_context_get_structure (context);
-      gst_structure_get (s, "context", GST_GL_TYPE_CONTEXT, &self->gl_context,
-          NULL);
-    }
-  }
-
-  GST_DEBUG_OBJECT (self, "found local context %p", self->gl_context);
-
-  gst_query_unref (query);
-
-  if (self->gl_context)
-    return TRUE;
-
   return FALSE;
 }
 

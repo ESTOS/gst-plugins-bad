@@ -97,6 +97,7 @@ static gboolean src_activate_mode (GstPad *, GstObject *, GstPadMode,
 static void src_task_loop (GstPad *);
 
 static GstFlowReturn sink_chain (GstPad *, GstObject *, GstBuffer *);
+static gboolean sink_event (GstPad * pad, GstObject * parent, GstEvent * event);
 
 static void on_key_received (GstDtlsConnection *, gpointer key, guint cipher,
     guint auth, GstDtlsEnc *);
@@ -135,7 +136,7 @@ gst_dtls_enc_class_init (GstDtlsEncClass * klass)
   properties[PROP_IS_CLIENT] =
       g_param_spec_boolean ("is-client",
       "Is client",
-      "Set to true if the decoder should act as"
+      "Set to true if the decoder should act as "
       "client and initiate the handshake",
       DEFAULT_IS_CLIENT,
       GST_PARAM_MUTABLE_READY | G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
@@ -164,10 +165,8 @@ gst_dtls_enc_class_init (GstDtlsEncClass * klass)
 
   g_object_class_install_properties (gobject_class, NUM_PROPERTIES, properties);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&src_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sink_template));
+  gst_element_class_add_static_pad_template (element_class, &src_template);
+  gst_element_class_add_static_pad_template (element_class, &sink_template);
 
   gst_element_class_set_static_metadata (element_class,
       "DTLS Encoder",
@@ -384,6 +383,7 @@ gst_dtls_enc_request_new_pad (GstElement * element,
   }
 
   gst_pad_set_chain_function (sink, GST_DEBUG_FUNCPTR (sink_chain));
+  gst_pad_set_event_function (sink, GST_DEBUG_FUNCPTR (sink_event));
 
   ret = gst_pad_set_active (sink, TRUE);
   g_warn_if_fail (ret);
@@ -526,6 +526,29 @@ sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer)
   gst_buffer_unref (buffer);
 
   return GST_FLOW_OK;
+}
+
+
+static gboolean
+sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
+{
+  gboolean ret = FALSE;
+
+  switch (GST_EVENT_TYPE (event)) {
+      /* Drop segment, stream-start as we will push our own from the src pad
+       * task.
+       * FIXME: do we need any information from upstream for pushing our own? */
+    case GST_EVENT_SEGMENT:
+    case GST_EVENT_STREAM_START:
+      gst_event_unref (event);
+      ret = TRUE;
+      break;
+    default:
+      ret = gst_pad_event_default (pad, parent, event);
+      break;
+  }
+
+  return ret;
 }
 
 static void

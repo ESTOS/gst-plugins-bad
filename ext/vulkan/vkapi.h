@@ -23,7 +23,7 @@
 
 #define VK_PROTOTYPES
 
-#include "vkconfig.h"
+#include <vkconfig.h>
 #include "vk_fwd.h"
 #include "vkmacros.h"
 
@@ -31,6 +31,12 @@
 #if GST_VULKAN_HAVE_WINDOW_XCB
 #ifndef VK_USE_PLATFORM_XCB_KHR
 #define VK_USE_PLATFORM_XCB_KHR
+#endif
+#endif
+
+#if GST_VULKAN_HAVE_WINDOW_WAYLAND
+#ifndef VK_USE_PLATFORM_WAYLAND_KHR
+#define VK_USE_PLATFORM_WAYLAND_KHR
 #endif
 #endif
 

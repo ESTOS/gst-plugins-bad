@@ -19,11 +19,11 @@
  */
 /**
  * SECTION:element-gstjp2kdecimator
+ * @title: gstjp2kdecimator
  *
  * The jp2kdecimator element removes information from JPEG2000 images without reencoding.
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 -v videotestsrc num-buffers=1 ! jp2kenc ! \
  *   gstjp2kdecimator max-decomposition-levels=2 ! jp2kdec ! \
@@ -31,7 +31,7 @@
  * ]|
  * This pipelines encodes a test image to JPEG2000, only keeps 3 decomposition levels
  * decodes the decimated image again and shows it on the screen.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -92,10 +92,10 @@ gst_jp2k_decimator_class_init (GstJP2kDecimatorClass * klass)
       "Removes information from JPEG2000 streams without recompression",
       "Sebastian Dröge <sebastian.droege@collabora.co.uk>");
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&sink_pad_template));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&src_pad_template));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &sink_pad_template);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &src_pad_template);
 
   gobject_class->set_property = gst_jp2k_decimator_set_property;
   gobject_class->get_property = gst_jp2k_decimator_get_property;

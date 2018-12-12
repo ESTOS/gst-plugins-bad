@@ -23,6 +23,7 @@
 
 /**
  * SECTION:element-daalaenc
+ * @title: daalaenc
  * @see_also: daaladec, oggmux
  *
  * This element encodes raw video into a Daala stream.
@@ -30,14 +31,13 @@
  * video codec maintained by the <ulink url="http://www.xiph.org/">Xiph.org
  * Foundation</ulink>.
  *
- * <refsect2>
- * <title>Example pipeline</title>
+ * ## Example pipeline
  * |[
  * gst-launch-1.0 -v videotestsrc num-buffers=1000 ! daalaenc ! oggmux ! filesink location=videotestsrc.ogg
  * ]| This example pipeline will encode a test video source to daala muxed in an
  * ogg container. Refer to the daaladec documentation to decode the create
  * stream.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -212,13 +212,12 @@ gst_daala_enc_class_init (GstDaalaEncClass * klass)
           1, G_MAXINT, DEFAULT_KEYFRAME_RATE,
           (GParamFlags) G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&daala_enc_src_factory));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&daala_enc_sink_factory));
-  gst_element_class_set_static_metadata (element_class,
-      "Daala video encoder", "Codec/Encoder/Video",
-      "Encode raw YUV video to a Daala stream",
+  gst_element_class_add_static_pad_template (element_class,
+      &daala_enc_src_factory);
+  gst_element_class_add_static_pad_template (element_class,
+      &daala_enc_sink_factory);
+  gst_element_class_set_static_metadata (element_class, "Daala video encoder",
+      "Codec/Encoder/Video", "Encode raw YUV video to a Daala stream",
       "Sebastian Dröge <slomo@circular-chaos.org>");
 
   gstvideo_encoder_class->start = GST_DEBUG_FUNCPTR (daala_enc_start);

@@ -18,9 +18,8 @@ libgstdtls_la_CFLAGS = \
     $(GST_CFLAGS) \
     $(DTLS_CFLAGS)
 
-libgstdtls_la_LIBADD = $(GST_LIBS) $(GST_BASE_LIBS) $(DTLS_LIBS)
+libgstdtls_la_LIBADD = $(GST_LIBS) $(GST_BASE_LIBS) $(DTLS_LIBS) $(WINSOCK2_LIBS)
 libgstdtls_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS)
-libgstdtls_la_LIBTOOLFLAGS = $(GST_PLUGIN_LIBTOOLFLAGS)
 
 noinst_HEADERS = \
     gstdtlsdec.h \

@@ -44,7 +44,7 @@
 #ifndef __GST_CV_SMOOTH_H__
 #define __GST_CV_SMOOTH_H__
 
-#include <gstopencvvideofilter.h>
+#include <gst/opencv/gstopencvvideofilter.h>
 
 G_BEGIN_DECLS
 
@@ -69,10 +69,16 @@ struct _GstCvSmooth
 
   gint type;
 
-  gint width;
-  gint height;
+  gint kernelwidth;
+  gint kernelheight;
   gdouble colorsigma;
   gdouble spatialsigma;
+
+  /* coordinates to apply the effect to */
+  gint positionx;
+  gint positiony;
+  gint width;
+  gint height;
 };
 
 struct _GstCvSmoothClass

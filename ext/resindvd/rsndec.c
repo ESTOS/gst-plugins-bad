@@ -369,7 +369,7 @@ rsn_dec_get_type (void)
   return type;
 }
 
-/** Audio decoder subclass */
+/* Audio decoder subclass */
 static GstStaticPadTemplate audio_sink_template =
     GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
@@ -405,10 +405,10 @@ rsn_audiodec_class_init (RsnAudioDecClass * klass)
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
   RsnDecClass *dec_class = RSN_DEC_CLASS (klass);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&audio_src_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&audio_sink_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &audio_src_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &audio_sink_template);
 
   gst_element_class_set_static_metadata (element_class, "RsnAudioDec",
       "Audio/Decoder",
@@ -422,7 +422,7 @@ rsn_audiodec_init (RsnAudioDec * self)
 {
 }
 
-/** Video decoder subclass */
+/* Video decoder subclass */
 static GstStaticPadTemplate video_sink_template =
 GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
@@ -455,10 +455,10 @@ rsn_videodec_class_init (RsnAudioDecClass * klass)
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
   RsnDecClass *dec_class = RSN_DEC_CLASS (klass);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&video_src_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&video_sink_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &video_src_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &video_sink_template);
 
   gst_element_class_set_static_metadata (element_class, "RsnVideoDec",
       "Video/Decoder",

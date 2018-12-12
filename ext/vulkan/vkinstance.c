@@ -72,7 +72,12 @@ struct _GstVulkanInstancePrivate
 GstVulkanInstance *
 gst_vulkan_instance_new (void)
 {
-  return g_object_new (GST_TYPE_VULKAN_INSTANCE, NULL);
+  GstVulkanInstance *instance;
+
+  instance = g_object_new (GST_TYPE_VULKAN_INSTANCE, NULL);
+  gst_object_ref_sink (instance);
+
+  return instance;
 }
 
 static void
@@ -234,6 +239,7 @@ gst_vulkan_instance_open (GstVulkanInstance * instance, GError ** error)
     gboolean swapchain_ext_found = FALSE;
     gboolean winsys_ext_found = FALSE;
     const gchar *winsys_ext_name;
+    uint32_t i;
 
     display_type = gst_vulkan_display_choose_type (instance);
 
@@ -245,7 +251,7 @@ gst_vulkan_instance_open (GstVulkanInstance * instance, GError ** error)
     }
 
     /* TODO: allow outside selection */
-    for (uint32_t i = 0; i < instance_extension_count; i++) {
+    for (i = 0; i < instance_extension_count; i++) {
       GST_TRACE_OBJECT (instance, "checking instance extension %s",
           instance_extensions[i].extensionName);
 
@@ -299,8 +305,13 @@ gst_vulkan_instance_open (GstVulkanInstance * instance, GError ** error)
     inst_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     inst_info.pNext = NULL;
     inst_info.pApplicationInfo = &app;
+#if 0
     inst_info.enabledLayerCount = enabled_layer_count;
     inst_info.ppEnabledLayerNames = (const char *const *) enabled_layers;
+#else
+    inst_info.enabledLayerCount = 0;
+    inst_info.ppEnabledLayerNames = NULL;
+#endif
     inst_info.enabledExtensionCount = enabled_extension_count;
     inst_info.ppEnabledExtensionNames = (const char *const *) extension_names;
 

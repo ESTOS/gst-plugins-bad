@@ -32,6 +32,7 @@
 #endif
 
 #include <gst/gst.h>
+#include <gst/codecparsers/codecparsers-prelude.h>
 
 G_BEGIN_DECLS
 
@@ -211,7 +212,9 @@ typedef struct _GstMpegVideoPacket          GstMpegVideoPacket;
  * @bitrate_value: Value of the bitrate as is in the stream (400bps unit)
  * @bitrate: the real bitrate of the Mpeg video stream in bits per second, 0 if VBR stream
  * @constrained_parameters_flag: %TRUE if this stream uses contrained parameters.
+ * @load_intra_quantiser_matrix: %TRUE indicates the presence of intra_quantiser_matrix
  * @intra_quantizer_matrix: intra-quantization table, in zigzag scan order
+ * @load_non_intra_quantiser_matrix: %TRUE indicates the presence of non_intra_quantiser_matrix
  * @non_intra_quantizer_matrix: non-intra quantization table, in zigzag scan order
  *
  * The Mpeg2 Video Sequence Header structure.
@@ -226,7 +229,9 @@ struct _GstMpegVideoSequenceHdr
 
   guint8  constrained_parameters_flag;
 
+  guint8  load_intra_quantiser_matrix;
   guint8  intra_quantizer_matrix[64];
+  guint8  load_non_intra_quantiser_matrix;
   guint8  non_intra_quantizer_matrix[64];
 
   /* Calculated values */
@@ -376,6 +381,7 @@ struct _GstMpegVideoPictureHdr
 {
   guint16 tsn;
   guint8 pic_type;
+  guint16 vbv_delay;
 
   guint8 full_pel_forward_vector, full_pel_backward_vector;
 
@@ -394,7 +400,7 @@ struct _GstMpegVideoPictureHdr
  * @alternate_scan: Alternate Scan
  * @repeat_first_field: Repeat First Field
  * @chroma_420_type: Chroma 420 Type
- * @progressive_frame: %TRUE if the frame is progressive %FALSE otherwize
+ * @progressive_frame: %TRUE if the frame is progressive %FALSE otherwise
  *
  * The Mpeg2 Video Picture Extension structure.
  */
@@ -445,10 +451,13 @@ struct _GstMpegVideoGop
 
 /**
  * GstMpegVideoSliceHdr:
- * @slice_vertical_position_extension: Extension to slice_vertical_position
+ * @vertical_position: slice vertical position
+ * @vertical_position_extension: Extension to slice_vertical_position
  * @priority_breakpoint: Point where the bitstream shall be partitioned
  * @quantiser_scale_code: Quantiser value (range: 1-31)
+ * @slice_ext_flag: Slice Extension flag
  * @intra_slice: Equal to one if all the macroblocks are intra macro blocks.
+ * @slice_picture_id_enable: controls the semantics of slice_picture_id
  * @slice_picture_id: Intended to aid recovery on severe bursts of
  *   errors for certain types of applications
  *
@@ -458,9 +467,14 @@ struct _GstMpegVideoGop
  */
 struct _GstMpegVideoSliceHdr
 {
+  guint8 vertical_position;
+  guint8 vertical_position_ext;
+
   guint8 priority_breakpoint;
   guint8 quantiser_scale_code;
+  guint8 slice_ext_flag;
   guint8 intra_slice;
+  guint8 slice_picture_id_enable;
   guint8 slice_picture_id;
 
   /* Calculated values */
@@ -488,68 +502,59 @@ struct _GstMpegVideoPacket
   gint   size;
 };
 
+GST_CODEC_PARSERS_API
 gboolean gst_mpeg_video_parse                         (GstMpegVideoPacket * packet,
                                                        const guint8 * data, gsize size, guint offset);
 
+GST_CODEC_PARSERS_API
 gboolean gst_mpeg_video_packet_parse_sequence_header    (const GstMpegVideoPacket * packet,
                                                          GstMpegVideoSequenceHdr * seqhdr);
 
+GST_CODEC_PARSERS_API
 gboolean gst_mpeg_video_packet_parse_sequence_extension (const GstMpegVideoPacket * packet,
                                                          GstMpegVideoSequenceExt * seqext);
 
+GST_CODEC_PARSERS_API
 gboolean gst_mpeg_video_packet_parse_sequence_display_extension (const GstMpegVideoPacket * packet,
                                                          GstMpegVideoSequenceDisplayExt * seqdisplayext);
 
+GST_CODEC_PARSERS_API
 gboolean gst_mpeg_video_packet_parse_sequence_scalable_extension (const GstMpegVideoPacket * packet,
                                                          GstMpegVideoSequenceScalableExt * seqscaleext);
 
+GST_CODEC_PARSERS_API
 gboolean gst_mpeg_video_packet_parse_picture_header     (const GstMpegVideoPacket * packet,
                                                          GstMpegVideoPictureHdr* pichdr);
 
+GST_CODEC_PARSERS_API
 gboolean gst_mpeg_video_packet_parse_picture_extension  (const GstMpegVideoPacket * packet,
                                                          GstMpegVideoPictureExt *picext);
 
+GST_CODEC_PARSERS_API
 gboolean gst_mpeg_video_packet_parse_gop                (const GstMpegVideoPacket * packet,
                                                          GstMpegVideoGop * gop);
 
+GST_CODEC_PARSERS_API
 gboolean gst_mpeg_video_packet_parse_slice_header       (const GstMpegVideoPacket * packet,
                                                          GstMpegVideoSliceHdr * slice_hdr,
                                                          GstMpegVideoSequenceHdr * seq_hdr,
                                                          GstMpegVideoSequenceScalableExt * seqscaleext);
 
+GST_CODEC_PARSERS_API
 gboolean gst_mpeg_video_packet_parse_quant_matrix_extension (const GstMpegVideoPacket * packet,
                                                          GstMpegVideoQuantMatrixExt * quant);
 
 /* seqext and displayext may be NULL if not received */
+
+GST_CODEC_PARSERS_API
 gboolean gst_mpeg_video_finalise_mpeg2_sequence_header (GstMpegVideoSequenceHdr *hdr,
    GstMpegVideoSequenceExt *seqext, GstMpegVideoSequenceDisplayExt *displayext);
 
-#ifndef GST_DISABLE_DEPRECATED
-gboolean gst_mpeg_video_parse_picture_header          (GstMpegVideoPictureHdr* hdr,
-                                                       const guint8 * data, gsize size, guint offset);
-
-gboolean gst_mpeg_video_parse_picture_extension       (GstMpegVideoPictureExt *ext,
-                                                       const guint8 * data, gsize size, guint offset);
-
-gboolean gst_mpeg_video_parse_gop                     (GstMpegVideoGop * gop,
-                                                       const guint8 * data, gsize size, guint offset);
-
-gboolean gst_mpeg_video_parse_sequence_header         (GstMpegVideoSequenceHdr * seqhdr,
-                                                       const guint8 * data, gsize size, guint offset);
-
-gboolean gst_mpeg_video_parse_sequence_extension      (GstMpegVideoSequenceExt * seqext,
-                                                       const guint8 * data, gsize size, guint offset);
-
-gboolean gst_mpeg_video_parse_sequence_display_extension (GstMpegVideoSequenceDisplayExt * seqdisplayext,
-                                                       const guint8 * data, gsize size, guint offset);
-
-gboolean gst_mpeg_video_parse_quant_matrix_extension  (GstMpegVideoQuantMatrixExt * quant,
-                                                       const guint8 * data, gsize size, guint offset);
-#endif
-
+GST_CODEC_PARSERS_API
 void     gst_mpeg_video_quant_matrix_get_raster_from_zigzag (guint8 out_quant[64],
                                                              const guint8 quant[64]);
 
+GST_CODEC_PARSERS_API
 void     gst_mpeg_video_quant_matrix_get_zigzag_from_raster (guint8 out_quant[64],
                                                              const guint8 quant[64]);
 

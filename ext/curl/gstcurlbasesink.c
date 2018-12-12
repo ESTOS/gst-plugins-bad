@@ -19,14 +19,14 @@
 
 /**
  * SECTION:element-curlsink
+ * @title: curlsink
  * @short_description: sink that uploads data to a server using libcurl
  * @see_also:
  *
  * This is a network sink that uses libcurl as a client to upload data to
  * a server (e.g. a HTTP/FTP server).
  *
- * <refsect2>
- * <title>Example launch line (upload a JPEG file to an HTTP server)</title>
+ * ## Example launch line (upload a JPEG file to an HTTP server)
  * |[
  * gst-launch-1.0 filesrc location=image.jpg ! jpegparse ! curlsink  \
  *     file-name=image.jpg  \
@@ -35,7 +35,7 @@
  *     content-type=image/jpeg  \
  *     use-content-length=false
  * ]|
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -235,8 +235,7 @@ gst_curl_base_sink_class_init (GstCurlBaseSinkClass * klass)
           DSCP_MIN, DSCP_MAX, DEFAULT_QOS_DSCP,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sinktemplate));
+  gst_element_class_add_static_pad_template (element_class, &sinktemplate);
 }
 
 static void
@@ -703,6 +702,21 @@ gst_curl_base_sink_transfer_set_common_options_unlocked (GstCurlBaseSink * sink)
       gst_curl_base_sink_transfer_write_cb);
   if (res != CURLE_OK) {
     sink->error = g_strdup_printf ("failed to set write function: %s",
+        curl_easy_strerror (res));
+    return FALSE;
+  }
+  /* Time out in case transfer speed in bytes per second stay below
+   * CURLOPT_LOW_SPEED_LIMIT during CURLOPT_LOW_SPEED_TIME */
+  res = curl_easy_setopt (sink->curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
+  if (res != CURLE_OK) {
+    sink->error = g_strdup_printf ("failed to set low speed limit: %s",
+        curl_easy_strerror (res));
+    return FALSE;
+  }
+  res = curl_easy_setopt (sink->curl, CURLOPT_LOW_SPEED_TIME,
+      (long) sink->timeout);
+  if (res != CURLE_OK) {
+    sink->error = g_strdup_printf ("failed to set low speed time: %s",
         curl_easy_strerror (res));
     return FALSE;
   }

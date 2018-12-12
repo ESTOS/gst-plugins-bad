@@ -22,43 +22,32 @@
 
 /**
  * SECTION:gsth265parser
+ * @title: GstH265Parser
  * @short_description: Convenience library for h265 video bitstream parsing.
  *
  * It offers you bitstream parsing in HEVC mode and non-HEVC mode. To identify
  * Nals in a bitstream and parse its headers, you should call:
- * <itemizedlist>
- *   <listitem>
- *      gst_h265_parser_identify_nalu() to identify the following nalu in
+ *
+ *   * gst_h265_parser_identify_nalu() to identify the following nalu in
  *        non-HEVC bitstreams
- *   </listitem>
- *   <listitem>
- *      gst_h265_parser_identify_nalu_hevc() to identify the nalu in
+ *
+ *   * gst_h265_parser_identify_nalu_hevc() to identify the nalu in
  *        HEVC bitstreams
- *   </listitem>
- * </itemizedlist>
  *
  * Then, depending on the #GstH265NalUnitType of the newly parsed #GstH265NalUnit,
  * you should call the differents functions to parse the structure:
- * <itemizedlist>
- *   <listitem>
- *      From #GST_H265_NAL_SLICE_TRAIL_N to #GST_H265_NAL_SLICE_CRA_NUT: gst_h265_parser_parse_slice_hdr()
- *   </listitem>
- *   <listitem>
- *      #GST_H265_NAL_SEI: gst_h265_parser_parse_sei()
- *   </listitem>
- *   <listitem>
- *      #GST_H265_NAL_VPS: gst_h265_parser_parse_vps()
- *   </listitem>
- *   <listitem>
- *      #GST_H265_NAL_SPS: gst_h265_parser_parse_sps()
- *   </listitem>
- *   <listitem>
- *      #GST_H265_NAL_PPS: #gst_h265_parser_parse_pps()
- *   </listitem>
- *   <listitem>
- *      Any other: gst_h265_parser_parse_nal()
- *   </listitem>
- * </itemizedlist>
+ *
+ *   * From #GST_H265_NAL_SLICE_TRAIL_N to #GST_H265_NAL_SLICE_CRA_NUT: gst_h265_parser_parse_slice_hdr()
+ *
+ *   * #GST_H265_NAL_SEI: gst_h265_parser_parse_sei()
+ *
+ *   * #GST_H265_NAL_VPS: gst_h265_parser_parse_vps()
+ *
+ *   * #GST_H265_NAL_SPS: gst_h265_parser_parse_sps()
+ *
+ *   * #GST_H265_NAL_PPS: #gst_h265_parser_parse_pps()
+ *
+ *   * Any other: gst_h265_parser_parse_nal()
  *
  * Note: You should always call gst_h265_parser_parse_nal() if you don't
  * actually need #GstH265NalUnitType to be parsed for your personal use, in
@@ -67,11 +56,8 @@
  * For more details about the structures, look at the ITU-T H.265
  * specifications, you can download them from:
  *
- * <itemizedlist>
- *   <listitem>
- *     ITU-T H.265: http://www.itu.int/rec/T-REC-H.265
- *   </listitem>
- * </itemizedlist>
+ *   * ITU-T H.265: http://www.itu.int/rec/T-REC-H.265
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -86,7 +72,7 @@
 #include <string.h>
 #include <math.h>
 
-GST_DEBUG_CATEGORY (h265_parser_debug);
+GST_DEBUG_CATEGORY_STATIC (h265_parser_debug);
 #define GST_CAT_DEFAULT h265_parser_debug
 
 static gboolean initialized = FALSE;
@@ -278,8 +264,19 @@ gst_h265_parse_profile_tier_level (GstH265ProfileTierLevel * ptl,
   READ_UINT8 (nr, ptl->non_packed_constraint_flag, 1);
   READ_UINT8 (nr, ptl->frame_only_constraint_flag, 1);
 
+  READ_UINT8 (nr, ptl->max_12bit_constraint_flag, 1);
+  READ_UINT8 (nr, ptl->max_10bit_constraint_flag, 1);
+  READ_UINT8 (nr, ptl->max_8bit_constraint_flag, 1);
+  READ_UINT8 (nr, ptl->max_422chroma_constraint_flag, 1);
+  READ_UINT8 (nr, ptl->max_420chroma_constraint_flag, 1);
+  READ_UINT8 (nr, ptl->max_monochrome_constraint_flag, 1);
+  READ_UINT8 (nr, ptl->intra_constraint_flag, 1);
+  READ_UINT8 (nr, ptl->one_picture_only_constraint_flag, 1);
+  READ_UINT8 (nr, ptl->lower_bit_rate_constraint_flag, 1);
+  READ_UINT8 (nr, ptl->max_14bit_constraint_flag, 1);
+
   /* skip the reserved zero bits */
-  if (!nal_reader_skip (nr, 44))
+  if (!nal_reader_skip (nr, 34))
     goto error;
 
   READ_UINT8 (nr, ptl->level_idc, 8);
@@ -1229,7 +1226,12 @@ gst_h265_parser_identify_nalu (GstH265Parser * parser,
       gst_h265_parser_identify_nalu_unchecked (parser, data, offset, size,
       nalu);
 
-  if (res != GST_H265_PARSER_OK || nalu->size == 2)
+  if (res != GST_H265_PARSER_OK)
+    goto beach;
+
+  /* The two NALs are exactly 2 bytes size and are placed at the end of an AU,
+   * there is no need to wait for the following */
+  if (nalu->type == GST_H265_NAL_EOS || nalu->type == GST_H265_NAL_EOB)
     goto beach;
 
   off2 = scan_for_start_codes (data + nalu->offset, size - nalu->offset);
@@ -1437,10 +1439,12 @@ gst_h265_parse_vps (GstH265NalUnit * nalu, GstH265VPS * vps)
   }
 
   READ_UINT8 (&nr, vps->max_layer_id, 6);
-  CHECK_ALLOWED_MAX (vps->max_layer_id, 0);
+  /* shall allow 63 */
+  CHECK_ALLOWED_MAX (vps->max_layer_id, 63);
 
   READ_UE_MAX (&nr, vps->num_layer_sets_minus1, 1023);
-  CHECK_ALLOWED_MAX (vps->num_layer_sets_minus1, 0);
+  /* allowd range is 0 to 1023 */
+  CHECK_ALLOWED_MAX (vps->num_layer_sets_minus1, 1023);
 
   for (i = 1; i <= vps->num_layer_sets_minus1; i++)
     for (j = 0; j <= vps->max_layer_id; j++)
@@ -1457,11 +1461,16 @@ gst_h265_parse_vps (GstH265NalUnit * nalu, GstH265VPS * vps)
       READ_UE_MAX (&nr, vps->num_ticks_poc_diff_one_minus1, G_MAXUINT32 - 1);
 
     READ_UE_MAX (&nr, vps->num_hrd_parameters, 1024);
-    CHECK_ALLOWED_MAX (vps->num_hrd_parameters, 1);
+    /* allowd range is
+     * 0 to vps_num_layer_sets_minus1 + 1 */
+    CHECK_ALLOWED_MAX (vps->num_hrd_parameters, vps->num_layer_sets_minus1 + 1);
 
     if (vps->num_hrd_parameters) {
       READ_UE_MAX (&nr, vps->hrd_layer_set_idx, 1023);
-      CHECK_ALLOWED_MAX (vps->hrd_layer_set_idx, 0);
+      /* allowd range is
+       * ( vps_base_layer_internal_flag ? 0 : 1 ) to vps_num_layer_sets_minus1
+       */
+      CHECK_ALLOWED_MAX (vps->hrd_layer_set_idx, vps->num_layer_sets_minus1);
 
       if (!gst_h265_parse_hrd_parameters (&vps->hrd_params, &nr,
               vps->cprms_present_flag, vps->max_sub_layers_minus1))
@@ -2643,4 +2652,189 @@ gst_h265_quant_matrix_8x8_get_raster_from_uprightdiagonal (guint8 out_quant[64],
 
   for (i = 0; i < 64; i++)
     out_quant[uprightdiagonal_8x8[i]] = quant[i];
+}
+
+typedef struct
+{
+  GstH265Profile profile;
+
+  guint8 max_12bit_constraint_flag;
+  guint8 max_10bit_constraint_flag;
+  guint8 max_8bit_constraint_flag;
+  guint8 max_422chroma_constraint_flag;
+  guint8 max_420chroma_constraint_flag;
+  guint8 max_monochrome_constraint_flag;
+  guint8 intra_constraint_flag;
+  guint8 one_picture_only_constraint_flag;
+  gboolean lower_bit_rate_constraint_flag_set;
+
+  /* Tie breaker if more than one profiles are matching */
+  guint priority;
+} FormatRangeExtensionProfile;
+
+typedef struct
+{
+  FormatRangeExtensionProfile *profile;
+  guint extra_constraints;
+} FormatRangeExtensionProfileMatch;
+
+static gint
+sort_fre_profile_matches (FormatRangeExtensionProfileMatch * a,
+    FormatRangeExtensionProfileMatch * b)
+{
+  gint d;
+
+  d = a->extra_constraints - b->extra_constraints;
+  if (d)
+    return d;
+
+  return b->profile->priority - a->profile->priority;
+}
+
+static GstH265Profile
+get_format_range_extension_profile (GstH265ProfileTierLevel * ptl)
+{
+  /* See Table A.2 for the definition of those formats */
+  FormatRangeExtensionProfile profiles[] = {
+    {GST_H265_PROFILE_MONOCHROME, 1, 1, 1, 1, 1, 1, 0, 0, TRUE, 0},
+    {GST_H265_PROFILE_MONOCHROME_12, 1, 0, 0, 1, 1, 1, 0, 0, TRUE, 1},
+    {GST_H265_PROFILE_MONOCHROME_16, 0, 0, 0, 1, 1, 1, 0, 0, TRUE, 2},
+    {GST_H265_PROFILE_MAIN_12, 1, 0, 0, 1, 1, 0, 0, 0, TRUE, 3},
+    {GST_H265_PROFILE_MAIN_422_10, 1, 1, 0, 1, 0, 0, 0, 0, TRUE, 4},
+    {GST_H265_PROFILE_MAIN_422_12, 1, 0, 0, 1, 0, 0, 0, 0, TRUE, 5},
+    {GST_H265_PROFILE_MAIN_444, 1, 1, 1, 0, 0, 0, 0, 0, TRUE, 6},
+    {GST_H265_PROFILE_MAIN_444_10, 1, 1, 0, 0, 0, 0, 0, 0, TRUE, 7},
+    {GST_H265_PROFILE_MAIN_444_12, 1, 0, 0, 0, 0, 0, 0, 0, TRUE, 8},
+    {GST_H265_PROFILE_MAIN_INTRA, 1, 1, 1, 1, 1, 0, 1, 0, FALSE, 9},
+    {GST_H265_PROFILE_MAIN_10_INTRA, 1, 1, 0, 1, 1, 0, 1, 0, FALSE, 10},
+    {GST_H265_PROFILE_MAIN_12_INTRA, 1, 0, 0, 1, 1, 0, 1, 0, FALSE, 11},
+    {GST_H265_PROFILE_MAIN_422_10_INTRA, 1, 1, 0, 1, 0, 0, 1, 0, FALSE, 12},
+    {GST_H265_PROFILE_MAIN_422_12_INTRA, 1, 0, 0, 1, 0, 0, 1, 0, FALSE, 13},
+    {GST_H265_PROFILE_MAIN_444_INTRA, 1, 1, 1, 0, 0, 0, 1, 0, FALSE, 14},
+    {GST_H265_PROFILE_MAIN_444_10_INTRA, 1, 1, 0, 0, 0, 0, 1, 0, FALSE, 15},
+    {GST_H265_PROFILE_MAIN_444_12_INTRA, 1, 0, 0, 0, 0, 0, 1, 0, FALSE, 16},
+    {GST_H265_PROFILE_MAIN_444_16_INTRA, 0, 0, 0, 0, 0, 0, 1, 0, FALSE, 17},
+    {GST_H265_PROFILE_MAIN_444_STILL_PICTURE, 1, 1, 1, 0, 0, 0, 1, 1, FALSE,
+        18},
+    {GST_H265_PROFILE_MAIN_444_16_STILL_PICTURE, 0, 0, 0, 0, 0, 0, 1, 1, FALSE,
+        19},
+  };
+  GstH265Profile result = GST_H265_PROFILE_INVALID;
+  guint i;
+  GList *matches = NULL;
+
+  for (i = 0; i < G_N_ELEMENTS (profiles); i++) {
+    FormatRangeExtensionProfile p = profiles[i];
+    guint extra_constraints = 0;
+    FormatRangeExtensionProfileMatch *m;
+
+    /* Filter out all the profiles having constraints not satisified by @ptl.
+     * Then pick the one having the least extra contraints. This allow us
+     * to match the closet profile if bitstream contains not standard
+     * constraints. */
+    if (p.max_12bit_constraint_flag != ptl->max_12bit_constraint_flag) {
+      if (p.max_12bit_constraint_flag)
+        continue;
+      extra_constraints++;
+    }
+
+    if (p.max_10bit_constraint_flag != ptl->max_10bit_constraint_flag) {
+      if (p.max_10bit_constraint_flag)
+        continue;
+      extra_constraints++;
+    }
+
+    if (p.max_8bit_constraint_flag != ptl->max_8bit_constraint_flag) {
+      if (p.max_8bit_constraint_flag)
+        continue;
+      extra_constraints++;
+    }
+
+    if (p.max_422chroma_constraint_flag != ptl->max_422chroma_constraint_flag) {
+      if (p.max_422chroma_constraint_flag)
+        continue;
+      extra_constraints++;
+    }
+
+    if (p.max_420chroma_constraint_flag != ptl->max_420chroma_constraint_flag) {
+      if (p.max_420chroma_constraint_flag)
+        continue;
+      extra_constraints++;
+    }
+
+    if (p.max_monochrome_constraint_flag != ptl->max_monochrome_constraint_flag) {
+      if (p.max_monochrome_constraint_flag)
+        continue;
+      extra_constraints++;
+    }
+
+    if (p.intra_constraint_flag != ptl->intra_constraint_flag) {
+      if (p.intra_constraint_flag)
+        continue;
+      extra_constraints++;
+    }
+
+    if (p.one_picture_only_constraint_flag !=
+        ptl->one_picture_only_constraint_flag) {
+      if (p.one_picture_only_constraint_flag)
+        continue;
+      extra_constraints++;
+    }
+
+    if (p.lower_bit_rate_constraint_flag_set
+        && !ptl->lower_bit_rate_constraint_flag)
+      continue;
+
+    m = g_new0 (FormatRangeExtensionProfileMatch, 1);
+    m->profile = &profiles[i];
+    m->extra_constraints = extra_constraints;
+    matches = g_list_prepend (matches, m);
+  }
+
+  if (matches) {
+    FormatRangeExtensionProfileMatch *m;
+
+    matches = g_list_sort (matches, (GCompareFunc) sort_fre_profile_matches);
+    m = matches->data;
+    result = m->profile->profile;
+    g_list_free_full (matches, g_free);
+  }
+
+  return result;
+}
+
+/**
+ * gst_h265_profile_tier_level_get_profile:
+ * @ptl: a #GstH265ProfileTierLevel
+ *
+ * Return the H265 profile defined in @ptl.
+ *
+ * Returns: a #GstH265Profile
+ * Since: 1.14
+ */
+GstH265Profile
+gst_h265_profile_tier_level_get_profile (GstH265ProfileTierLevel * ptl)
+{
+  if (ptl->profile_idc == GST_H265_PROFILE_IDC_MAIN
+      || ptl->profile_compatibility_flag[1])
+    return GST_H265_PROFILE_MAIN;
+
+  if (ptl->profile_idc == GST_H265_PROFILE_IDC_MAIN_10
+      || ptl->profile_compatibility_flag[2])
+    return GST_H265_PROFILE_MAIN_10;
+
+  if (ptl->profile_idc == GST_H265_PROFILE_IDC_MAIN_STILL_PICTURE
+      || ptl->profile_compatibility_flag[3])
+    return GST_H265_PROFILE_MAIN_STILL_PICTURE;
+
+  if (ptl->profile_idc == GST_H265_PROFILE_IDC_FORMAT_RANGE_EXTENSION
+      || ptl->profile_compatibility_flag[4])
+    return get_format_range_extension_profile (ptl);
+
+  /* TODO:
+   * - GST_H265_PROFILE_IDC_HIGH_THROUGHPUT
+   * - GST_H265_PROFILE_IDC_SCREEN_CONTENT_CODING
+   */
+
+  return GST_H265_PROFILE_INVALID;
 }

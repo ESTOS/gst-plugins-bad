@@ -5,7 +5,8 @@ libgstbluez_la_SOURCES = \
 	gsta2dpsink.c \
 	gstavdtpsink.c \
 	gstavdtpsrc.c \
-	gstavdtputil.c
+	gstavdtputil.c \
+	gstavrcputil.c
 
 nodist_libgstbluez_la_SOURCES = \
 	$(BUILT_SOURCES)
@@ -25,14 +26,14 @@ libgstbluez_la_LIBADD = \
 	$(GIO_LIBS) \
 	$(GIO_UNIX_LIBS)
 libgstbluez_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS)
-libgstbluez_la_LIBTOOLFLAGS = $(GST_PLUGIN_LIBTOOLFLAGS)
 
 noinst_HEADERS = \
 	a2dp-codecs.h \
 	gsta2dpsink.h \
 	gstavdtpsink.h \
 	gstavdtpsrc.h \
-	gstavdtputil.h
+	gstavdtputil.h \
+	gstavrcputil.h
 
 BUILT_SOURCES = \
 	bluez.h \

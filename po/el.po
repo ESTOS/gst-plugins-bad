@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gst-plugins-bad 0.10.21.2\n"
 "Report-Msgid-Bugs-To: http://bugzilla.gnome.org/\n"
-"POT-Creation-Date: 2016-04-20 15:31+0300\n"
+"POT-Creation-Date: 2017-05-04 15:09+0300\n"
 "PO-Revision-Date: 2012-05-05 19:17+0100\n"
 "Last-Translator: Savvas Radevic <vicedar@gmail.com>\n"
 "Language-Team: Greek <team@lists.gnome.gr>\n"
@@ -18,6 +18,12 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n>1;\n"
+
+msgid "failed to draw pattern"
+msgstr ""
+
+msgid "A GL error occured"
+msgstr ""
 
 msgid "format wasn't negotiated before get function"
 msgstr ""
@@ -53,23 +59,6 @@ msgstr ""
 msgid "Could not open sndfile stream for reading."
 msgstr "Αδυναμία ανοίγματος αρχείου \"%s\" για ανάγνωση."
 
-msgid "Could not establish connection to sndio"
-msgstr ""
-
-msgid "Failed to query sndio capabilities"
-msgstr ""
-
-#, fuzzy
-msgid "Could not configure sndio"
-msgstr "Αδυναμία ανοίγματος αρχείου \"%s\" για ανάγνωση."
-
-#, fuzzy
-msgid "Could not start sndio"
-msgstr "Αδυναμία ανάγνωσης δίσκου DVD."
-
-msgid "Internal data flow error."
-msgstr "Εσωτερικό σφάλμα ροής δεδομένων."
-
 msgid "Generated file has a larger preroll time than its streams duration"
 msgstr ""
 
@@ -89,22 +78,11 @@ msgstr ""
 msgid "Failed to get fragment URL."
 msgstr ""
 
-msgid "Internal data stream error."
-msgstr "Εσωτερικό σφάλμα ροής δεδομένων."
-
 msgid "Couldn't download fragments"
 msgstr ""
 
-msgid "No file name specified for writing."
-msgstr "Δεν έχει καθορισθεί όνομα αρχείου για εγγραφή."
-
-#, c-format
-msgid "Given file name \"%s\" can't be converted to local file name encoding."
-msgstr ""
-
-#, c-format
-msgid "Could not open file \"%s\" for writing."
-msgstr "Αδυναμία ανοίγματος αρχείου \"%s\" για εγγραφή."
+msgid "Internal data stream error."
+msgstr "Εσωτερικό σφάλμα ροής δεδομένων."
 
 #, c-format
 msgid "Device \"%s\" does not exist."
@@ -126,19 +104,48 @@ msgstr "Αδυναμία λήψης ρυθμίσεων από τη συσκευ�
 msgid "Could not open file \"%s\" for reading."
 msgstr "Αδυναμία ανοίγματος αρχείου \"%s\" για ανάγνωση."
 
-msgid "Couldn't find DVB channel configuration file"
+msgid "Couldn't find channel configuration file"
 msgstr ""
 
 #, c-format
-msgid "Couldn't load DVB channel configuration file: %s"
-msgstr ""
-
-msgid "DVB channel configuration file doesn't contain any channels"
+msgid "Couldn't load channel configuration file: '%s'"
 msgstr ""
 
 #, c-format
-msgid "Couldn't find details for DVB channel %s"
+msgid "Couldn't find details for channel '%s'"
 msgstr ""
+
+#, c-format
+msgid "No properties for channel '%s'"
+msgstr ""
+
+#, fuzzy, c-format
+msgid "Failed to set properties for channel '%s'"
+msgstr "Αποτυχία ανοίγματος της συσκευής DVD '%s'."
+
+#, c-format
+msgid "Couldn't find channel configuration file: '%s'"
+msgstr ""
+
+msgid "Channel configuration file doesn't contain any channels"
+msgstr ""
+
+#, fuzzy
+#~ msgid "Could not configure sndio"
+#~ msgstr "Αδυναμία ανοίγματος αρχείου \"%s\" για ανάγνωση."
+
+#, fuzzy
+#~ msgid "Could not start sndio"
+#~ msgstr "Αδυναμία ανάγνωσης δίσκου DVD."
+
+#~ msgid "No file name specified for writing."
+#~ msgstr "Δεν έχει καθορισθεί όνομα αρχείου για εγγραφή."
+
+#~ msgid "Could not open file \"%s\" for writing."
+#~ msgstr "Αδυναμία ανοίγματος αρχείου \"%s\" για εγγραφή."
+
+#~ msgid "Internal data flow error."
+#~ msgstr "Εσωτερικό σφάλμα ροής δεδομένων."
 
 #~ msgid "Could not write to file \"%s\"."
 #~ msgstr "Αδυναμία εγγραφής στο αρχείο \"%s\"."

@@ -1,6 +1,7 @@
 .dirstamp
 aggregator
 h264parser
+isoff
 mpegvideoparser
 mpegts
 vc1parser
@@ -12,3 +13,5 @@ gstglupload
 gstglcolorconvert
 gstglsl
 gstglquery
+gstglheaders
+gstglmatrix

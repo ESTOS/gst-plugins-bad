@@ -20,15 +20,15 @@
 
 /**
  * SECTION:element-removesilence
+ * @title: removesilence
  *
  * Removes all silence periods from an audio stream, dropping silence buffers.
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 -v -m filesrc location="audiofile" ! decodebin ! removesilence remove=true ! wavenc ! filesink location=without_audio.wav
  * ]|
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -128,10 +128,8 @@ gst_remove_silence_class_init (GstRemoveSilenceClass * klass)
       "Tiago Katcipis <tiagokatcipis@gmail.com>\n \
        Paulo Pizarro  <paulo.pizarro@gmail.com>");
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&src_template));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&sink_template));
+  gst_element_class_add_static_pad_template (gstelement_class, &src_template);
+  gst_element_class_add_static_pad_template (gstelement_class, &sink_template);
 
   GST_BASE_TRANSFORM_CLASS (klass)->transform_ip =
       GST_DEBUG_FUNCPTR (gst_remove_silence_transform_ip);

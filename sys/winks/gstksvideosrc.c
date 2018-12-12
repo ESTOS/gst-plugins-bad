@@ -20,11 +20,11 @@
 
 /**
  * SECTION:element-ksvideosrc
+ * @title: ksvideosrc
  *
  * Provides low-latency video capture from WDM cameras on Windows.
  *
- * <refsect2>
- * <title>Example pipelines</title>
+ * ## Example pipelines
  * |[
  * gst-launch-1.0 -v ksvideosrc do-stats=TRUE ! videoconvert ! dshowvideosink
  * ]| Capture from a camera and render using dshowvideosink.
@@ -32,7 +32,7 @@
  * gst-launch-1.0 -v ksvideosrc do-stats=TRUE ! image/jpeg, width=640, height=480
  * ! jpegdec ! videoconvert ! dshowvideosink
  * ]| Capture from an MJPEG camera and render using dshowvideosink.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -927,7 +927,7 @@ gst_ks_video_src_create (GstPushSrc * pushsrc, GstBuffer ** buf)
   if (G_UNLIKELY (priv->do_stats))
     gst_ks_video_src_update_statistics (self);
 
-  if (!gst_ks_video_device_postprocess_frame (priv->device, *buf)) {
+  if (!gst_ks_video_device_postprocess_frame (priv->device, buf)) {
     GST_ELEMENT_ERROR (self, RESOURCE, FAILED, ("Postprocessing failed"),
         ("Postprocessing failed"));
     return GST_FLOW_ERROR;
@@ -1013,7 +1013,7 @@ plugin_init (GstPlugin * plugin)
       0, "Kernel streaming video source");
 
   if (!gst_element_register (plugin, "ksvideosrc",
-          GST_RANK_NONE, GST_TYPE_KS_VIDEO_SRC))
+          GST_RANK_PRIMARY, GST_TYPE_KS_VIDEO_SRC))
     return FALSE;
 
   if (!gst_device_provider_register (plugin, "ksdeviceprovider",
@@ -1027,4 +1027,4 @@ GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
     GST_VERSION_MINOR,
     winks,
     "Windows kernel streaming plugin",
-    plugin_init, VERSION, "LGPL", "GStreamer", "http://gstreamer.net/")
+    plugin_init, VERSION, "LGPL", GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)

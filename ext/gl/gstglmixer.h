@@ -24,6 +24,7 @@
 #include <gst/gst.h>
 #include <gst/video/video.h>
 #include <gst/gl/gl.h>
+#include <gst/gl/gstglfuncs.h>
 #include "gstglbasemixer.h"
 
 G_BEGIN_DECLS
@@ -78,14 +79,13 @@ typedef gboolean (*GstGLMixerSetCaps) (GstGLMixer* mixer,
   GstCaps* outcaps);
 typedef void (*GstGLMixerReset) (GstGLMixer *mixer);
 typedef gboolean (*GstGLMixerProcessFunc) (GstGLMixer *mix, GstBuffer *outbuf);
-typedef gboolean (*GstGLMixerProcessTextures) (GstGLMixer *mix, guint out_tex);
+typedef gboolean (*GstGLMixerProcessTextures) (GstGLMixer *mix, GstGLMemory *out_tex);
 
 struct _GstGLMixer
 {
   GstGLBaseMixer vaggregator;
 
-  GLuint fbo;
-  GLuint depthbuffer;
+  GstGLFramebuffer *fbo;
 
   GstCaps *out_caps;
 

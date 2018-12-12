@@ -21,15 +21,15 @@
 
 /**
  * SECTION:element-libde265dec
+ * @title: libde265dec
  *
  * Decodes HEVC/H.265 video.
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 filesrc location=bitstream.hevc ! 'video/x-hevc,stream-format=byte-stream,framerate=25/1' ! libde265dec ! autovideosink
  * ]| The above pipeline decodes the HEVC/H.265 bitstream and renders it to the screen.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -117,10 +117,8 @@ gst_libde265_dec_class_init (GstLibde265DecClass * klass)
   decoder_class->handle_frame =
       GST_DEBUG_FUNCPTR (gst_libde265_dec_handle_frame);
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&sink_template));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&src_template));
+  gst_element_class_add_static_pad_template (gstelement_class, &sink_template);
+  gst_element_class_add_static_pad_template (gstelement_class, &src_template);
 
   gst_element_class_set_static_metadata (gstelement_class,
       "HEVC/H.265 decoder",
@@ -521,6 +519,7 @@ _gst_libde265_image_available (GstVideoDecoder * decoder, int width, int height)
     }
     if (!gst_video_decoder_negotiate (decoder)) {
       GST_ERROR_OBJECT (dec, "Failed to negotiate format");
+      gst_video_codec_state_unref (state);
       return GST_FLOW_ERROR;
     }
     if (dec->output_state != NULL) {
@@ -684,6 +683,7 @@ _gst_libde265_return_image (GstVideoDecoder * decoder,
   GstVideoFrame outframe;
   GstVideoCodecFrame *out_frame;
   int frame_number;
+  int plane;
 
   ref = (struct GstLibde265FrameRef *) de265_get_image_plane_user_data (img, 0);
   if (ref != NULL) {
@@ -733,7 +733,7 @@ _gst_libde265_return_image (GstVideoDecoder * decoder,
     return GST_FLOW_ERROR;
   }
 
-  for (int plane = 0; plane < 3; plane++) {
+  for (plane = 0; plane < 3; plane++) {
     int width = de265_get_image_width (img, plane);
     int height = de265_get_image_height (img, plane);
     int srcstride = width;

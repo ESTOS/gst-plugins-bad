@@ -20,15 +20,17 @@
  */
 /**
  * SECTION:element-shmsink
+ * @title: shmsink
  *
  * Send data over shared memory to the matching source.
  *
- * <refsect2>
- * <title>Example launch lines</title>
+ * ## Example launch lines
  * |[
- * gst-launch-1.0 -v videotestsrc !  shmsink socket-path=/tmp/blah shm-size=1000000
+ * gst-launch-1.0 -v videotestsrc ! "video/x-raw, format=YUY2, color-matrix=sdtv, \
+ * chroma-site=mpeg2, width=(int)320, height=(int)240, framerate=(fraction)30/1" \
+ * ! shmsink socket-path=/tmp/blah shm-size=2000000
  * ]| Send video to shm buffers.
- * </refsect2>
+ *
  */
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -287,8 +289,9 @@ gst_shm_sink_allocator_alloc_locked (GstShmSinkAllocator * self, gsize size,
     if (padding && (params->flags & GST_MEMORY_FLAG_ZERO_PADDED))
       memset (mymem->data + params->prefix + size, 0, padding);
 
-    gst_memory_init (memory, params->flags, g_object_ref (self), NULL,
-        maxsize, align, params->prefix, size);
+    gst_memory_init (memory, params->flags,
+        GST_ALLOCATOR_CAST (g_object_ref (self)), NULL, maxsize, align,
+        params->prefix, size);
   }
 
   return memory;
@@ -332,6 +335,8 @@ gst_shm_sink_allocator_new (GstShmSink * sink)
 {
   GstShmSinkAllocator *self = g_object_new (GST_TYPE_SHM_SINK_ALLOCATOR, NULL);
 
+  gst_object_ref_sink (self);
+
   self->sink = gst_object_ref (sink);
 
   return self;
@@ -347,6 +352,7 @@ gst_shm_sink_init (GstShmSink * self)
 {
   g_cond_init (&self->cond);
   self->size = DEFAULT_SIZE;
+  self->unlock = FALSE;
   self->wait_for_connection = DEFAULT_WAIT_FOR_CONNECTION;
   self->perms = DEFAULT_PERMS;
 
@@ -419,8 +425,7 @@ gst_shm_sink_class_init (GstShmSinkClass * klass)
       GST_TYPE_SHM_SINK, G_SIGNAL_RUN_LAST, 0, NULL, NULL,
       g_cclosure_marshal_VOID__INT, G_TYPE_NONE, 1, G_TYPE_INT);
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&sinktemplate));
+  gst_element_class_add_static_pad_template (gstelement_class, &sinktemplate);
 
   gst_element_class_set_static_metadata (gstelement_class,
       "Shared Memory Sink",
@@ -663,18 +668,36 @@ gst_shm_sink_render (GstBaseSink * bsink, GstBuffer * buf)
   GstFlowReturn ret = GST_FLOW_OK;
   GstMemory *memory = NULL;
   GstBuffer *sendbuf = NULL;
+  gsize written_bytes;
 
   GST_OBJECT_LOCK (self);
+  if (self->unlock) {
+    GST_OBJECT_UNLOCK (self);
+    return GST_FLOW_FLUSHING;
+  }
+
   while (self->wait_for_connection && !self->clients) {
     g_cond_wait (&self->cond, GST_OBJECT_GET_LOCK (self));
-    if (self->unlock)
-      goto flushing;
+    if (self->unlock) {
+      GST_OBJECT_UNLOCK (self);
+      ret = gst_base_sink_wait_preroll (bsink);
+      if (ret == GST_FLOW_OK)
+        GST_OBJECT_LOCK (self);
+      else
+        return ret;
+    }
   }
 
   while (!gst_shm_sink_can_render (self, GST_BUFFER_TIMESTAMP (buf))) {
     g_cond_wait (&self->cond, GST_OBJECT_GET_LOCK (self));
-    if (self->unlock)
-      goto flushing;
+    if (self->unlock) {
+      GST_OBJECT_UNLOCK (self);
+      ret = gst_base_sink_wait_preroll (bsink);
+      if (ret == GST_FLOW_OK)
+        GST_OBJECT_LOCK (self);
+      else
+        return ret;
+    }
   }
 
 
@@ -695,50 +718,83 @@ gst_shm_sink_render (GstBaseSink * bsink, GstBuffer * buf)
   if (need_new_memory) {
     if (gst_buffer_get_size (buf) > sp_writer_get_max_buf_size (self->pipe)) {
       gsize area_size = sp_writer_get_max_buf_size (self->pipe);
-      GST_OBJECT_UNLOCK (self);
-      GST_ELEMENT_ERROR (self, RESOURCE, NO_SPACE_LEFT,
-          ("Shared memory area is too small"),
+      GST_ELEMENT_ERROR (self, RESOURCE, NO_SPACE_LEFT, (NULL),
           ("Shared memory area of size %" G_GSIZE_FORMAT " is smaller than"
               "buffer of size %" G_GSIZE_FORMAT, area_size,
               gst_buffer_get_size (buf)));
-      return GST_FLOW_ERROR;
+      goto error;
     }
 
     while ((memory =
             gst_shm_sink_allocator_alloc_locked (self->allocator,
                 gst_buffer_get_size (buf), &self->params)) == NULL) {
       g_cond_wait (&self->cond, GST_OBJECT_GET_LOCK (self));
-      if (self->unlock)
-        goto flushing;
+      if (self->unlock) {
+        GST_OBJECT_UNLOCK (self);
+        ret = gst_base_sink_wait_preroll (bsink);
+        if (ret == GST_FLOW_OK)
+          GST_OBJECT_LOCK (self);
+        else
+          return ret;
+      }
     }
 
     while (self->wait_for_connection && !self->clients) {
       g_cond_wait (&self->cond, GST_OBJECT_GET_LOCK (self));
       if (self->unlock) {
         GST_OBJECT_UNLOCK (self);
-        gst_memory_unref (memory);
-        return GST_FLOW_FLUSHING;
+        ret = gst_base_sink_wait_preroll (bsink);
+        if (ret == GST_FLOW_OK) {
+          GST_OBJECT_LOCK (self);
+        } else {
+          gst_memory_unref (memory);
+          return ret;
+        }
       }
     }
 
-    gst_memory_map (memory, &map, GST_MAP_WRITE);
-    gst_buffer_extract (buf, 0, map.data, map.size);
+    if (!gst_memory_map (memory, &map, GST_MAP_WRITE)) {
+      GST_ELEMENT_ERROR (self, STREAM, FAILED,
+          (NULL), ("Failed to map memory"));
+      goto error;
+    }
+
+    GST_DEBUG_OBJECT (self,
+        "Copying %" G_GSIZE_FORMAT " bytes into map of size %" G_GSIZE_FORMAT
+        " bytes.", gst_buffer_get_size (buf), map.size);
+    written_bytes = gst_buffer_extract (buf, 0, map.data, map.size);
+    GST_DEBUG_OBJECT (self, "Copied %" G_GSIZE_FORMAT " bytes.", written_bytes);
     gst_memory_unmap (memory, &map);
 
     sendbuf = gst_buffer_new ();
-    gst_buffer_copy_into (sendbuf, buf, GST_BUFFER_COPY_METADATA, 0, -1);
+    if (!gst_buffer_copy_into (sendbuf, buf, GST_BUFFER_COPY_METADATA, 0, -1)) {
+      GST_ELEMENT_ERROR (self, STREAM, FAILED,
+          (NULL), ("Failed to copy data into send buffer"));
+      gst_buffer_unref (sendbuf);
+      goto error;
+    }
     gst_buffer_append_memory (sendbuf, memory);
   } else {
     sendbuf = gst_buffer_ref (buf);
   }
 
-  gst_buffer_map (sendbuf, &map, GST_MAP_READ);
+  if (!gst_buffer_map (sendbuf, &map, GST_MAP_READ)) {
+    GST_ELEMENT_ERROR (self, STREAM, FAILED,
+        (NULL), ("Failed to map data into send buffer"));
+    goto error;
+  }
+
   /* Make the memory readonly as of now as we've sent it to the other side
    * We know it's not mapped for writing anywhere as we just mapped it for
    * reading
    */
-
   rv = sp_writer_send_buf (self->pipe, (char *) map.data, map.size, sendbuf);
+  if (rv == -1) {
+    GST_ELEMENT_ERROR (self, STREAM, FAILED,
+        (NULL), ("Failed to send data over SHM"));
+    gst_buffer_unmap (sendbuf, &map);
+    goto error;
+  }
 
   gst_buffer_unmap (sendbuf, &map);
 
@@ -747,19 +803,13 @@ gst_shm_sink_render (GstBaseSink * bsink, GstBuffer * buf)
   if (rv == 0) {
     GST_DEBUG_OBJECT (self, "No clients connected, unreffing buffer");
     gst_buffer_unref (sendbuf);
-  } else if (rv == -1) {
-    GST_ELEMENT_ERROR (self, STREAM, FAILED, ("Invalid allocated buffer"),
-        ("The shmpipe library rejects our buffer, this is a bug"));
-    ret = GST_FLOW_ERROR;
   }
-
-  /* If we allocated our own memory, then unmap it */
 
   return ret;
 
-flushing:
+error:
   GST_OBJECT_UNLOCK (self);
-  return GST_FLOW_FLUSHING;
+  return GST_FLOW_ERROR;
 }
 
 static void
@@ -778,11 +828,20 @@ pollthread_func (gpointer data)
   GstShmSink *self = GST_SHM_SINK (data);
   GList *item;
   GstClockTime timeout = GST_CLOCK_TIME_NONE;
+  int rv = 0;
 
   while (!self->stop) {
 
-    if (gst_poll_wait (self->poll, timeout) < 0)
+    do {
+      rv = gst_poll_wait (self->poll, timeout);
+    } while (rv < 0 && errno == EINTR);
+
+    if (rv < 0) {
+      GST_ELEMENT_ERROR (self, RESOURCE, READ,
+          ("Failed waiting on fd activity"),
+          ("gst_poll_wait returned %d, errno: %d", rv, errno));
       return NULL;
+    }
 
     timeout = GST_CLOCK_TIME_NONE;
 

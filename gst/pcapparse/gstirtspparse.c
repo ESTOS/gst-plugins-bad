@@ -20,6 +20,7 @@
  */
 /**
  * SECTION:element-irtspparse
+ * @title: irtspparse
  * @short_description: Interleaved RTSP parser
  * @see_also: #GstPcapParse
  *
@@ -27,14 +28,13 @@
  * so-called "channels" from received interleaved (TCP) RTSP data
  * (typically extracted from some network capture).
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 filesrc location=h264crasher.pcap ! pcapparse ! irtspparse
  * ! rtph264depay ! ffdec_h264 ! fakesink
  * ]| Read from a pcap dump file using filesrc, extract the raw TCP packets,
  * depayload and decode them.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -105,10 +105,8 @@ gst_irtsp_parse_class_init (GstIRTSPParseClass * klass)
   parse_class->stop = GST_DEBUG_FUNCPTR (gst_irtsp_parse_stop);
   parse_class->handle_frame = GST_DEBUG_FUNCPTR (gst_irtsp_parse_handle_frame);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sink_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&src_template));
+  gst_element_class_add_static_pad_template (element_class, &sink_template);
+  gst_element_class_add_static_pad_template (element_class, &src_template);
 
   gst_element_class_set_static_metadata (element_class, "IRTSPParse",
       "Raw/Parser",

@@ -2,6 +2,7 @@ plugin_LTLIBRARIES = libgstandroidmedia.la
 
 libgstandroidmedia_la_SOURCES = \
 	gstahcsrc.c \
+	gstahssrc.c \
 	gstamcaudiodec.c \
 	gstamc.c \
 	gstamcsurface.c \
@@ -9,12 +10,13 @@ libgstandroidmedia_la_SOURCES = \
 	gstamcvideodec.c \
 	gstamcvideoenc.c \
 	gst-android-graphics-imageformat.c \
-	gst-android-graphics-surfacetexture.c \
 	gst-android-hardware-camera.c \
+	gst-android-hardware-sensor.c \
 	gstjniutils.c
 
 noinst_HEADERS = \
 	gstahcsrc.h \
+	gstahssrc.h \
 	gstamcaudiodec.h \
 	gstamc-constants.h \
 	gstamc.h \
@@ -23,14 +25,15 @@ noinst_HEADERS = \
 	gstamcvideodec.h \
 	gstamcvideoenc.h \
 	gst-android-graphics-imageformat.h \
-	gst-android-graphics-surfacetexture.h \
 	gst-android-hardware-camera.h \
-	gstjniutils.h
+	gst-android-hardware-sensor.h \
+	gstjniutils.h \
+	gstsensors.h
 
 libgstandroidmedia_la_CFLAGS = \
-	-I$(top_srcdir)/gst-libs \
-	-I$(top_builddir)/gst-libs \
+	$(GST_PLUGINS_BAD_CFLAGS) \
 	$(GST_PLUGINS_BASE_CFLAGS) \
+	$(GST_GL_CFLAGS) \
 	$(GST_BASE_CFLAGS) \
 	$(GST_CFLAGS) \
 	$(ORC_CFLAGS) \
@@ -38,18 +41,21 @@ libgstandroidmedia_la_CFLAGS = \
 
 libgstandroidmedia_la_LIBADD = \
 	$(top_builddir)/gst-libs/gst/interfaces/libgstphotography-$(GST_API_VERSION).la \
-	$(top_builddir)/gst-libs/gst/gl/libgstgl-$(GST_API_VERSION).la \
 	$(GST_PLUGINS_BASE_LIBS) \
 	-lgstaudio-@GST_API_VERSION@ \
 	-lgstpbutils-@GST_API_VERSION@ \
 	-lgstvideo-@GST_API_VERSION@ \
+	$(GST_GL_LIBS) \
 	$(GST_BASE_LIBS) \
 	$(GST_LIBS) \
 	$(ORC_LIBS)
 libgstandroidmedia_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS)
-libgstandroidmedia_la_LIBTOOLFLAGS = $(GST_PLUGIN_LIBTOOLFLAGS)
 
 androidmedia_java_classesdir = $(datadir)/gst-android/ndk-build/androidmedia/
 androidmedia_java_classes_DATA = \
 	org/freedesktop/gstreamer/androidmedia/GstAhcCallback.java \
+	org/freedesktop/gstreamer/androidmedia/GstAhsCallback.java \
 	org/freedesktop/gstreamer/androidmedia/GstAmcOnFrameAvailableListener.java
+
+# Make sure the .java files end up in the tarball
+EXTRA_DIST = $(androidmedia_java_classes_DATA)

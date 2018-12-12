@@ -19,64 +19,31 @@
 
 /**
  * SECTION:element-zbar
+ * @title: zbar
  *
  * Detect bar codes in the video streams and send them as element messages to
  * the #GstBus if .#GstZBar:message property is %TRUE.
  * If the .#GstZBar:attach-frame property is %TRUE, the posted barcode message
  * includes a sample of the frame where the barcode was detected (Since 1.6).
  *
- * The element generate messages named
- * <classname>&quot;barcode&quot;</classname>. The structure containes these
- * fields:
- * <itemizedlist>
- * <listitem>
- *   <para>
- *   #GstClockTime
- *   <classname>&quot;timestamp&quot;</classname>:
- *   the timestamp of the buffer that triggered the message.
- *   </para>
- * </listitem>
- * <listitem>
- *   <para>
- *   gchar*
- *   <classname>&quot;type&quot;</classname>:
- *   the symbol type.
- *   </para>
- * </listitem>
- * <listitem>
- *   <para>
- *   gchar*
- *   <classname>&quot;symbol&quot;</classname>:
- *   the deteted bar code data.
- *   </para>
- * </listitem>
- * <listitem>
- *   <para>
- *   gint
- *   <classname>&quot;quality&quot;</classname>:
- *   an unscaled, relative quantity: larger values are better than smaller
- *   values.
- *   </para>
- * </listitem>
- * <listitem>
- *   <para>
- *   GstSample
- *   <classname>&quot;frame&quot;</classname>:
- *   the frame in which the barcode message was detected, if
- *   the .#GstZBar:attach-frame property was set to %TRUE (Since 1.6)
- *   </para>
- * </listitem>
- * </itemizedlist>
+ * The element generate messages named`barcode`. The structure containes these fields:
  *
- * <refsect2>
- * <title>Example launch lines</title>
+ * * #GstClockTime `timestamp`: the timestamp of the buffer that triggered the message.
+ * * gchar * `type`: the symbol type.
+ * * gchar * `symbol`: the deteted bar code data.
+ * * gint `quality`: an unscaled, relative quantity: larger values are better than smaller
+ *   values.
+ * * GstSample `frame`: the frame in which the barcode message was detected, if
+ *   the .#GstZBar:attach-frame property was set to %TRUE (Since 1.6)
+ *
+ * ## Example launch lines
  * |[
  * gst-launch-1.0 -m v4l2src ! videoconvert ! zbar ! videoconvert ! xvimagesink
  * ]| This pipeline will detect barcodes and send them as messages.
  * |[
  * gst-launch-1.0 -m v4l2src ! tee name=t ! queue ! videoconvert ! zbar ! fakesink t. ! queue ! xvimagesink
  * ]| Same as above, but running the filter on a branch to keep the display in color
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -192,10 +159,10 @@ gst_zbar_class_init (GstZBarClass * g_class)
       "Detect bar codes in the video streams",
       "Stefan Kost <ensonic@users.sf.net>");
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_zbar_sink_template));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_zbar_src_template));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &gst_zbar_sink_template);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &gst_zbar_src_template);
 
   trans_class->start = GST_DEBUG_FUNCPTR (gst_zbar_start);
   trans_class->stop = GST_DEBUG_FUNCPTR (gst_zbar_stop);

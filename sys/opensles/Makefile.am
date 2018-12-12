@@ -15,10 +15,10 @@ libgstopensles_la_LIBADD =            \
     $(GST_BASE_LIBS)                  \
     $(GST_LIBS)
 libgstopensles_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS) -lOpenSLES
-libgstopensles_la_LIBTOOLFLAGS = $(GST_PLUGIN_LIBTOOLFLAGS)
 
 noinst_HEADERS = openslescommon.h     \
                  openslesringbuffer.h \
                  openslessink.h       \
-                 openslessrc.h
+                 openslessrc.h        \
+                 opensles.h
 

@@ -229,6 +229,20 @@ tsmux_get_pat_interval (TsMux * mux)
 }
 
 /**
+ * tsmux_resend_pat:
+ * @mux: a #TsMux
+ *
+ * Resends the PAT before the next stream packet.
+ */
+void
+tsmux_resend_pat (TsMux * mux)
+{
+  g_return_if_fail (mux != NULL);
+
+  mux->last_pat_ts = G_MININT64;
+}
+
+/**
  * tsmux_set_si_interval:
  * @mux: a #TsMux
  * @freq: a new SI table interval
@@ -261,13 +275,28 @@ tsmux_get_si_interval (TsMux * mux)
 }
 
 /**
+ * tsmux_resend_si:
+ * @mux: a #TsMux
+ *
+ * Resends the SI tables before the next stream packet.
+ *
+ */
+void
+tsmux_resend_si (TsMux * mux)
+{
+  g_return_if_fail (mux != NULL);
+
+  mux->last_si_ts = G_MININT64;
+}
+
+/**
  * tsmux_add_mpegts_si_section:
  * @mux: a #TsMux
  * @section: (transfer full): a #GstMpegtsSection to add
  *
  * Add a Service Information #GstMpegtsSection to the stream
  *
- * Returns: #TRUE on success, #FALSE otherwise
+ * Returns: %TRUE on success, %FALSE otherwise
  */
 gboolean
 tsmux_add_mpegts_si_section (TsMux * mux, GstMpegtsSection * section)
@@ -425,6 +454,20 @@ tsmux_get_pmt_interval (TsMuxProgram * program)
   g_return_val_if_fail (program != NULL, 0);
 
   return program->pmt_interval;
+}
+
+/**
+ * tsmux_resend_pmt:
+ * @program: a #TsMuxProgram
+ *
+ * Resends the PMT before the next stream packet.
+ */
+void
+tsmux_resend_pmt (TsMuxProgram * program)
+{
+  g_return_if_fail (program != NULL);
+
+  program->last_pmt_ts = G_MININT64;
 }
 
 /**
@@ -853,6 +896,7 @@ tsmux_section_write_packet (GstMpegtsSectionType * type,
   gsize data_size = 0;
   gsize payload_written;
   guint len = 0, offset = 0, payload_len = 0;
+  guint extra_alloc_bytes = 0;
 
   g_return_val_if_fail (section != NULL, FALSE);
   g_return_val_if_fail (mux != NULL, FALSE);
@@ -907,11 +951,34 @@ tsmux_section_write_packet (GstMpegtsSectionType * type,
     TS_DEBUG ("Creating packet buffer at offset "
         "%" G_GSIZE_FORMAT " with length %u", payload_written, payload_len);
 
+    /* If in M2TS mode, we will need to resize to 4 bytes after the end
+       of the buffer. For performance reasons, we will now try to include
+       4 extra bytes from the source buffer, then resize down, to avoid
+       having an extra 4 byte GstMemory appended. If the source buffer
+       does not have enough data for this, a new GstMemory will be used */
+    if (gst_buffer_get_size (section_buffer) - (payload_written +
+            payload_len) >= 4) {
+      /* enough space */
+      extra_alloc_bytes = 4;
+    }
     packet_buffer = gst_buffer_copy_region (section_buffer, GST_BUFFER_COPY_ALL,
-        payload_written, payload_len);
+        payload_written, payload_len + extra_alloc_bytes);
 
     /* Prepend the header to the section data */
     gst_buffer_prepend_memory (packet_buffer, mem);
+
+    /* add an extra 4 bytes if it could not be reserved already */
+    if (extra_alloc_bytes == 4) {
+      /* we allocated those already, resize */
+      gst_buffer_set_size (packet_buffer,
+          gst_buffer_get_size (packet_buffer) - extra_alloc_bytes);
+    } else {
+      void *ptr = g_malloc (4);
+      GstMemory *extra =
+          gst_memory_new_wrapped (GST_MEMORY_FLAG_READONLY, ptr, 4, 0, 0, ptr,
+          g_free);
+      gst_buffer_append_memory (packet_buffer, extra);
+    }
 
     TS_DEBUG ("Writing %d bytes to section. %d bytes remaining",
         len, section->pi.stream_avail - len);
@@ -1080,6 +1147,7 @@ tsmux_write_stream_packet (TsMux * mux, TsMuxStream * stream)
 
   gst_buffer_unmap (buf, &map);
 
+  GST_DEBUG ("Writing PES of size %d", (int) gst_buffer_get_size (buf));
   res = tsmux_packet_out (mux, buf, cur_pcr);
 
   /* Reset all dynamic flags */

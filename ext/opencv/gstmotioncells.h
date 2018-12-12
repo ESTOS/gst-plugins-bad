@@ -45,7 +45,7 @@
 #ifndef __GST_MOTIONCELLS_H__
 #define __GST_MOTIONCELLS_H__
 
-#include <gstopencvvideofilter.h>
+#include <gst/opencv/gstopencvvideofilter.h>
 #include <opencv2/core/core_c.h>
 #include "motioncells_wrapper.h"
 
@@ -90,6 +90,9 @@ struct _GstMotioncells
   //time stuff
   GTimeVal tv;
   double framerate;
+  //Video width and height are known in "gst_motion_cells_handle_sink_event",
+  // but not when setting the "motionmaskcoords".
+  gchar has_delayed_mask;
 };
 
 struct _GstMotioncellsClass

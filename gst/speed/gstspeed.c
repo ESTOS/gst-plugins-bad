@@ -20,20 +20,20 @@
 
 /**
  * SECTION:element-speed
+ * @title: speed
  *
  * Plays an audio stream at a different speed (by resampling the audio).
- * 
+ *
  * Do not use this element. Either use the 'pitch' element, or do a seek with
  * a non-1.0 rate parameter, this will have the same effect as using the speed
  * element (but relies on the decoder/demuxer to handle this correctly, also
  * requires a fairly up-to-date gst-plugins-base, as of February 2007).
- * 
- * <refsect2>
- * <title>Example launch line</title>
+ *
+ * ## Example launch line
  * |[
  * gst-launch-1.0 filesrc location=test.ogg ! decodebin ! audioconvert ! speed speed=1.5 ! audioconvert ! audioresample ! autoaudiosink
  * ]| Plays an .ogg file at 1.5x speed.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -390,7 +390,7 @@ gst_speed_class_init (GstSpeedClass * klass)
 
   g_object_class_install_property (G_OBJECT_CLASS (klass), PROP_SPEED,
       g_param_spec_float ("speed", "speed", "speed",
-          0.1, 40.0, 1.0,
+          0.1f, 40.0, 1.0,
           G_PARAM_READWRITE | G_PARAM_CONSTRUCT | G_PARAM_STATIC_STRINGS));
 
   gst_element_class_set_static_metadata (gstelement_class, "Speed",
@@ -399,10 +399,10 @@ gst_speed_class_init (GstSpeedClass * klass)
       "Andy Wingo <apwingo@eos.ncsu.edu>, "
       "Tim-Philipp Müller <tim@centricular.net>");
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_speed_src_template));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_speed_sink_template));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &gst_speed_src_template);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &gst_speed_sink_template);
 }
 
 static void

@@ -33,6 +33,20 @@
 #include "mpegtsbase.h"
 #include "mpegtspacketizer.h"
 
+/* color specifications for JPEG 2000 stream over MPEG TS */
+typedef enum
+{
+  GST_MPEGTSDEMUX_JPEG2000_COLORSPEC_UNKNOWN,
+  GST_MPEGTSDEMUX_JPEG2000_COLORSPEC_SRGB,
+  GST_MPEGTSDEMUX_JPEG2000_COLORSPEC_REC601,
+  GST_MPEGTSDEMUX_JPEG2000_COLORSPEC_REC709,
+  GST_MPEGTSDEMUX_JPEG2000_COLORSPEC_CIELUV,
+  GST_MPEGTSDEMUX_JPEG2000_COLORSPEC_CIEXYZ,
+  GST_MPEGTSDEMUX_JPEG2000_COLORSPEC_REC2020,
+  GST_MPEGTSDEMUX_JPEG2000_COLORSPEC_SMPTE2084
+} GstMpegTsDemuxJpeg2000ColorSpec;
+
+
 G_BEGIN_DECLS
 #define GST_TYPE_TS_DEMUX \
   (gst_ts_demux_get_type())
@@ -64,6 +78,7 @@ struct _GstTSDemux
   gboolean emit_statistics;
 
   /*< private >*/
+  gint program_generation; /* Incremented each time we switch program 0..15 */
   MpegTSBaseProgram *program;	/* Current program */
   MpegTSBaseProgram *previous_program; /* Previous program, to deactivate once
 					* the new program becomes active */

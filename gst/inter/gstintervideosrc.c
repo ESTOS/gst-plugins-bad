@@ -18,20 +18,20 @@
  */
 /**
  * SECTION:element-gstintervideosrc
+ * @title: gstintervideosrc
  *
  * The intervideosrc element is a video source element.  It is used
  * in connection with a intervideosink element in a different pipeline,
  * similar to interaudiosink and interaudiosrc.
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 -v intervideosrc ! queue ! xvimagesink
  * ]|
- * 
+ *
  * The intersubsrc element cannot be used effectively with gst-launch-1.0,
  * as it requires a second pipeline in the application to send subtitles.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -100,8 +100,8 @@ gst_inter_video_src_class_init (GstInterVideoSrcClass * klass)
   GST_DEBUG_CATEGORY_INIT (gst_inter_video_src_debug_category, "intervideosrc",
       0, "debug category for intervideosrc element");
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_inter_video_src_src_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_inter_video_src_src_template);
 
   gst_element_class_set_static_metadata (element_class,
       "Internal video source",

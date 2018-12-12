@@ -38,44 +38,44 @@ gst_decklink_mode_get_type (void)
 {
   static gsize id = 0;
   static const GEnumValue modes[] = {
-    {GST_DECKLINK_MODE_AUTO, "auto", "Automatic detection"},
+    {GST_DECKLINK_MODE_AUTO, "Automatic detection", "auto"},
 
-    {GST_DECKLINK_MODE_NTSC, "ntsc", "NTSC SD 60i"},
-    {GST_DECKLINK_MODE_NTSC2398, "ntsc2398", "NTSC SD 60i (24 fps)"},
-    {GST_DECKLINK_MODE_PAL, "pal", "PAL SD 50i"},
-    {GST_DECKLINK_MODE_NTSC_P, "ntsc-p", "NTSC SD 60p"},
-    {GST_DECKLINK_MODE_PAL_P, "pal-p", "PAL SD 50p"},
+    {GST_DECKLINK_MODE_NTSC, "NTSC SD 60i", "ntsc"},
+    {GST_DECKLINK_MODE_NTSC2398, "NTSC SD 60i (24 fps)", "ntsc2398"},
+    {GST_DECKLINK_MODE_PAL, "PAL SD 50i", "pal"},
+    {GST_DECKLINK_MODE_NTSC_P, "NTSC SD 60p", "ntsc-p"},
+    {GST_DECKLINK_MODE_PAL_P, "PAL SD 50p", "pal-p"},
 
-    {GST_DECKLINK_MODE_1080p2398, "1080p2398", "HD1080 23.98p"},
-    {GST_DECKLINK_MODE_1080p24, "1080p24", "HD1080 24p"},
-    {GST_DECKLINK_MODE_1080p25, "1080p25", "HD1080 25p"},
-    {GST_DECKLINK_MODE_1080p2997, "1080p2997", "HD1080 29.97p"},
-    {GST_DECKLINK_MODE_1080p30, "1080p30", "HD1080 30p"},
+    {GST_DECKLINK_MODE_1080p2398, "HD1080 23.98p", "1080p2398"},
+    {GST_DECKLINK_MODE_1080p24, "HD1080 24p", "1080p24"},
+    {GST_DECKLINK_MODE_1080p25, "HD1080 25p", "1080p25"},
+    {GST_DECKLINK_MODE_1080p2997, "HD1080 29.97p", "1080p2997"},
+    {GST_DECKLINK_MODE_1080p30, "HD1080 30p", "1080p30"},
 
-    {GST_DECKLINK_MODE_1080i50, "1080i50", "HD1080 50i"},
-    {GST_DECKLINK_MODE_1080i5994, "1080i5994", "HD1080 59.94i"},
-    {GST_DECKLINK_MODE_1080i60, "1080i60", "HD1080 60i"},
+    {GST_DECKLINK_MODE_1080i50, "HD1080 50i", "1080i50"},
+    {GST_DECKLINK_MODE_1080i5994, "HD1080 59.94i", "1080i5994"},
+    {GST_DECKLINK_MODE_1080i60, "HD1080 60i", "1080i60"},
 
-    {GST_DECKLINK_MODE_1080p50, "1080p50", "HD1080 50p"},
-    {GST_DECKLINK_MODE_1080p5994, "1080p5994", "HD1080 59.94p"},
-    {GST_DECKLINK_MODE_1080p60, "1080p60", "HD1080 60p"},
+    {GST_DECKLINK_MODE_1080p50, "HD1080 50p", "1080p50"},
+    {GST_DECKLINK_MODE_1080p5994, "HD1080 59.94p", "1080p5994"},
+    {GST_DECKLINK_MODE_1080p60, "HD1080 60p", "1080p60"},
 
-    {GST_DECKLINK_MODE_720p50, "720p50", "HD720 50p"},
-    {GST_DECKLINK_MODE_720p5994, "720p5994", "HD720 59.94p"},
-    {GST_DECKLINK_MODE_720p60, "720p60", "HD720 60p"},
+    {GST_DECKLINK_MODE_720p50, "HD720 50p", "720p50"},
+    {GST_DECKLINK_MODE_720p5994, "HD720 59.94p", "720p5994"},
+    {GST_DECKLINK_MODE_720p60, "HD720 60p", "720p60"},
 
-    {GST_DECKLINK_MODE_1556p2398, "1556p2398", "2k 23.98p"},
-    {GST_DECKLINK_MODE_1556p24, "1556p24", "2k 24p"},
-    {GST_DECKLINK_MODE_1556p25, "1556p25", "2k 25p"},
+    {GST_DECKLINK_MODE_1556p2398, "2k 23.98p", "1556p2398"},
+    {GST_DECKLINK_MODE_1556p24, "2k 24p", "1556p24"},
+    {GST_DECKLINK_MODE_1556p25, "2k 25p", "1556p25"},
 
-    {GST_DECKLINK_MODE_2160p2398, "2160p2398", "4k 23.98p"},
-    {GST_DECKLINK_MODE_2160p24, "2160p24", "4k 24p"},
-    {GST_DECKLINK_MODE_2160p25, "2160p25", "4k 25p"},
-    {GST_DECKLINK_MODE_2160p2997, "2160p2997", "4k 29.97p"},
-    {GST_DECKLINK_MODE_2160p30, "2160p30", "4k 30p"},
-    {GST_DECKLINK_MODE_2160p50, "2160p50", "4k 50p"},
-    {GST_DECKLINK_MODE_2160p5994, "2160p5994", "4k 59.94p"},
-    {GST_DECKLINK_MODE_2160p60, "2160p60", "4k 60p"},
+    {GST_DECKLINK_MODE_2160p2398, "4k 23.98p", "2160p2398"},
+    {GST_DECKLINK_MODE_2160p24, "4k 24p", "2160p24"},
+    {GST_DECKLINK_MODE_2160p25, "4k 25p", "2160p25"},
+    {GST_DECKLINK_MODE_2160p2997, "4k 29.97p", "2160p2997"},
+    {GST_DECKLINK_MODE_2160p30, "4k 30p", "2160p30"},
+    {GST_DECKLINK_MODE_2160p50, "4k 50p", "2160p50"},
+    {GST_DECKLINK_MODE_2160p5994, "4k 59.94p", "2160p5994"},
+    {GST_DECKLINK_MODE_2160p60, "4k 60p", "2160p60"},
 
     {0, NULL, NULL}
   };
@@ -93,13 +93,13 @@ gst_decklink_connection_get_type (void)
 {
   static gsize id = 0;
   static const GEnumValue connections[] = {
-    {GST_DECKLINK_CONNECTION_AUTO, "auto", "Auto"},
-    {GST_DECKLINK_CONNECTION_SDI, "sdi", "SDI"},
-    {GST_DECKLINK_CONNECTION_HDMI, "hdmi", "HDMI"},
-    {GST_DECKLINK_CONNECTION_OPTICAL_SDI, "optical-sdi", "Optical SDI"},
-    {GST_DECKLINK_CONNECTION_COMPONENT, "component", "Component"},
-    {GST_DECKLINK_CONNECTION_COMPOSITE, "composite", "Composite"},
-    {GST_DECKLINK_CONNECTION_SVIDEO, "svideo", "S-Video"},
+    {GST_DECKLINK_CONNECTION_AUTO, "Auto", "auto"},
+    {GST_DECKLINK_CONNECTION_SDI, "SDI", "sdi"},
+    {GST_DECKLINK_CONNECTION_HDMI, "HDMI", "hdmi"},
+    {GST_DECKLINK_CONNECTION_OPTICAL_SDI, "Optical SDI", "optical-sdi"},
+    {GST_DECKLINK_CONNECTION_COMPONENT, "Component", "component"},
+    {GST_DECKLINK_CONNECTION_COMPOSITE, "Composite", "composite"},
+    {GST_DECKLINK_CONNECTION_SVIDEO, "S-Video", "svideo"},
     {0, NULL, NULL}
   };
 
@@ -112,19 +112,93 @@ gst_decklink_connection_get_type (void)
 }
 
 GType
+gst_decklink_video_format_get_type (void)
+{
+  static gsize id = 0;
+  static const GEnumValue types[] = {
+    {GST_DECKLINK_VIDEO_FORMAT_AUTO, "Auto", "auto"},
+    {GST_DECKLINK_VIDEO_FORMAT_8BIT_YUV, "bmdFormat8BitYUV", "8bit-yuv"},
+    {GST_DECKLINK_VIDEO_FORMAT_10BIT_YUV, "bmdFormat10BitYUV", "10bit-yuv"},
+    {GST_DECKLINK_VIDEO_FORMAT_8BIT_ARGB, "bmdFormat8BitARGB", "8bit-argb"},
+    {GST_DECKLINK_VIDEO_FORMAT_8BIT_BGRA, "bmdFormat8BitBGRA", "8bit-bgra"},
+    /* Not yet supported:
+       {GST_DECKLINK_VIDEO_FORMAT_10BIT_RGB, "bmdFormat10BitRGB", "10bit-rgb"},
+       {GST_DECKLINK_VIDEO_FORMAT_12BIT_RGB, "bmdFormat12BitRGB", "12bit-rgb"},
+       {GST_DECKLINK_VIDEO_FORMAT_12BIT_RGBLE, "bmdFormat12BitRGBLE", "12bit-rgble"},
+       {GST_DECKLINK_VIDEO_FORMAT_10BIT_RGBXLE, "bmdFormat10BitRGBXLE", "10bit-rgbxle"},
+       {GST_DECKLINK_VIDEO_FORMAT_10BIT_RGBX, "bmdFormat10BitRGBX", "10bit-rgbx"},
+     */
+    {0, NULL, NULL}
+  };
+
+  if (g_once_init_enter (&id)) {
+    GType tmp = g_enum_register_static ("GstDecklinkVideoFormat", types);
+    g_once_init_leave (&id, tmp);
+  }
+
+  return (GType) id;
+}
+
+GType
+gst_decklink_timecode_format_get_type (void)
+{
+  static gsize id = 0;
+  static const GEnumValue timecodeformats[] = {
+    {GST_DECKLINK_TIMECODE_FORMAT_RP188VITC1, "bmdTimecodeRP188VITC1",
+        "rp188vitc1"},
+    {GST_DECKLINK_TIMECODE_FORMAT_RP188VITC2, "bmdTimecodeRP188VITC2",
+        "rp188vitc2"},
+    {GST_DECKLINK_TIMECODE_FORMAT_RP188LTC, "bmdTimecodeRP188LTC", "rp188ltc"},
+    {GST_DECKLINK_TIMECODE_FORMAT_RP188ANY, "bmdTimecodeRP188Any", "rp188any"},
+    {GST_DECKLINK_TIMECODE_FORMAT_VITC, "bmdTimecodeVITC", "vitc"},
+    {GST_DECKLINK_TIMECODE_FORMAT_VITCFIELD2, "bmdTimecodeVITCField2",
+        "vitcfield2"},
+    {GST_DECKLINK_TIMECODE_FORMAT_SERIAL, "bmdTimecodeSerial", "serial"},
+    {0, NULL, NULL}
+  };
+
+  if (g_once_init_enter (&id)) {
+    GType tmp =
+        g_enum_register_static ("GstDecklinkTimecodeFormat", timecodeformats);
+    g_once_init_leave (&id, tmp);
+  }
+
+  return (GType) id;
+}
+
+GType
+gst_decklink_keyer_mode_get_type (void)
+{
+  static gsize id = 0;
+  static const GEnumValue keyermodes[] = {
+    {GST_DECKLINK_KEYER_MODE_OFF, "Off", "off"},
+    {GST_DECKLINK_KEYER_MODE_INTERNAL, "Internal", "internal"},
+    {GST_DECKLINK_KEYER_MODE_EXTERNAL, "External", "external"},
+    {0, NULL, NULL}
+  };
+
+  if (g_once_init_enter (&id)) {
+    GType tmp = g_enum_register_static ("GstDecklinkKeyerMode", keyermodes);
+    g_once_init_leave (&id, tmp);
+  }
+
+  return (GType) id;
+}
+
+GType
 gst_decklink_audio_connection_get_type (void)
 {
   static gsize id = 0;
   static const GEnumValue connections[] = {
-    {GST_DECKLINK_AUDIO_CONNECTION_AUTO, "auto", "Automatic"},
-    {GST_DECKLINK_AUDIO_CONNECTION_EMBEDDED, "embedded",
-        "SDI/HDMI embedded audio"},
-    {GST_DECKLINK_AUDIO_CONNECTION_AES_EBU, "aes", "AES/EBU input"},
-    {GST_DECKLINK_AUDIO_CONNECTION_ANALOG, "analog", "Analog input"},
-    {GST_DECKLINK_AUDIO_CONNECTION_ANALOG_XLR, "analog-xlr",
-        "Analog input (XLR)"},
-    {GST_DECKLINK_AUDIO_CONNECTION_ANALOG_RCA, "analog-rca",
-        "Analog input (RCA)"},
+    {GST_DECKLINK_AUDIO_CONNECTION_AUTO, "Automatic", "auto"},
+    {GST_DECKLINK_AUDIO_CONNECTION_EMBEDDED, "SDI/HDMI embedded audio",
+        "embedded"},
+    {GST_DECKLINK_AUDIO_CONNECTION_AES_EBU, "AES/EBU input", "aes"},
+    {GST_DECKLINK_AUDIO_CONNECTION_ANALOG, "Analog input", "analog"},
+    {GST_DECKLINK_AUDIO_CONNECTION_ANALOG_XLR, "Analog input (XLR)",
+        "analog-xlr"},
+    {GST_DECKLINK_AUDIO_CONNECTION_ANALOG_RCA, "Analog input (RCA)",
+        "analog-rca"},
     {0, NULL, NULL}
   };
 
@@ -137,10 +211,31 @@ gst_decklink_audio_connection_get_type (void)
   return (GType) id;
 }
 
+GType
+gst_decklink_audio_channels_get_type (void)
+{
+  static gsize id = 0;
+  static const GEnumValue connections[] = {
+    {GST_DECKLINK_AUDIO_CHANNELS_2, "2 Channels", "2"},
+    {GST_DECKLINK_AUDIO_CHANNELS_8, "8 Channels", "8"},
+    {GST_DECKLINK_AUDIO_CHANNELS_16, "16 Channels", "16"},
+    {GST_DECKLINK_AUDIO_CHANNELS_MAX, "Maximum channels supported", "max"},
+    {0, NULL, NULL}
+  };
+
+  if (g_once_init_enter (&id)) {
+    GType tmp =
+        g_enum_register_static ("GstDecklinkAudioChannels", connections);
+    g_once_init_leave (&id, tmp);
+  }
+
+  return (GType) id;
+}
+
 #define NTSC 10, 11, false, "bt601"
 #define PAL 12, 11, true, "bt601"
-#define HD 1, 1, false, "bt709"
-#define UHD 1, 1, false, "bt2020"
+#define HD 1, 1, true, "bt709"
+#define UHD 1, 1, true, "bt2020"
 
 static const GstDecklinkMode modes[] = {
   {bmdModeNTSC, 720, 486, 30000, 1001, true, NTSC},     // default is ntsc
@@ -181,6 +276,55 @@ static const GstDecklinkMode modes[] = {
   {bmdMode4K2160p50, 3840, 2160, 50, 1, false, UHD},
   {bmdMode4K2160p5994, 3840, 2160, 60000, 1001, false, UHD},
   {bmdMode4K2160p60, 3840, 2160, 60, 1, false, UHD}
+};
+
+static const struct
+{
+  BMDPixelFormat format;
+  gint bpp;
+  GstVideoFormat vformat;
+} formats[] = {
+  /* *INDENT-OFF* */
+  {bmdFormat8BitYUV, 2, GST_VIDEO_FORMAT_UYVY},  /* auto */
+  {bmdFormat8BitYUV, 2, GST_VIDEO_FORMAT_UYVY},
+  {bmdFormat10BitYUV, 4, GST_VIDEO_FORMAT_v210},
+  {bmdFormat8BitARGB, 4, GST_VIDEO_FORMAT_ARGB},
+  {bmdFormat8BitBGRA, 4, GST_VIDEO_FORMAT_BGRA},
+/* Not yet supported
+  {bmdFormat10BitRGB, FIXME, FIXME},
+  {bmdFormat12BitRGB, FIXME, FIXME},
+  {bmdFormat12BitRGBLE, FIXME, FIXME},
+  {bmdFormat10BitRGBXLE, FIXME, FIXME},
+  {bmdFormat10BitRGBX, FIXME, FIXME} */
+  /* *INDENT-ON* */
+};
+
+static const struct
+{
+  BMDTimecodeFormat format;
+  GstDecklinkTimecodeFormat gstformat;
+} tcformats[] = {
+  /* *INDENT-OFF* */
+  {bmdTimecodeRP188VITC1, GST_DECKLINK_TIMECODE_FORMAT_RP188VITC1},
+  {bmdTimecodeRP188VITC2, GST_DECKLINK_TIMECODE_FORMAT_RP188VITC2},
+  {bmdTimecodeRP188LTC, GST_DECKLINK_TIMECODE_FORMAT_RP188LTC},
+  {bmdTimecodeRP188Any, GST_DECKLINK_TIMECODE_FORMAT_RP188ANY},
+  {bmdTimecodeVITC, GST_DECKLINK_TIMECODE_FORMAT_VITC},
+  {bmdTimecodeVITCField2, GST_DECKLINK_TIMECODE_FORMAT_VITCFIELD2},
+  {bmdTimecodeSerial, GST_DECKLINK_TIMECODE_FORMAT_SERIAL}
+  /* *INDENT-ON* */
+};
+
+static const struct
+{
+  BMDKeyerMode keymode;
+  GstDecklinkKeyerMode gstkeymode;
+} kmodes[] = {
+  /* *INDENT-OFF* */
+  {bmdKeyerModeOff, GST_DECKLINK_KEYER_MODE_OFF},
+  {bmdKeyerModeInternal, GST_DECKLINK_KEYER_MODE_INTERNAL},
+  {bmdKeyerModeExternal, GST_DECKLINK_KEYER_MODE_EXTERNAL}
+  /* *INDENT-ON* */
 };
 
 const GstDecklinkMode *
@@ -293,8 +437,71 @@ gst_decklink_get_mode_enum_from_bmd (BMDDisplayMode mode)
   return displayMode;
 }
 
+const BMDPixelFormat
+gst_decklink_pixel_format_from_type (GstDecklinkVideoFormat t)
+{
+  return formats[t].format;
+}
+
+const gint
+gst_decklink_bpp_from_type (GstDecklinkVideoFormat t)
+{
+  return formats[t].bpp;
+}
+
+const GstDecklinkVideoFormat
+gst_decklink_type_from_video_format (GstVideoFormat f)
+{
+  guint i;
+
+  for (i = 1; i < G_N_ELEMENTS (formats); i++) {
+    if (formats[i].vformat == f)
+      return (GstDecklinkVideoFormat) i;
+  }
+  g_assert_not_reached ();
+  return GST_DECKLINK_VIDEO_FORMAT_AUTO;
+}
+
+const BMDTimecodeFormat
+gst_decklink_timecode_format_from_enum (GstDecklinkTimecodeFormat f)
+{
+  return tcformats[f].format;
+}
+
+const GstDecklinkTimecodeFormat
+gst_decklink_timecode_format_to_enum (BMDTimecodeFormat f)
+{
+  guint i;
+
+  for (i = 0; i < G_N_ELEMENTS (tcformats); i++) {
+    if (tcformats[i].format == f)
+      return (GstDecklinkTimecodeFormat) i;
+  }
+  g_assert_not_reached ();
+  return GST_DECKLINK_TIMECODE_FORMAT_RP188ANY;
+}
+
+const BMDKeyerMode
+gst_decklink_keyer_mode_from_enum (GstDecklinkKeyerMode m)
+{
+  return kmodes[m].keymode;
+}
+
+const GstDecklinkKeyerMode
+gst_decklink_keyer_mode_to_enum (BMDKeyerMode m)
+{
+  guint i;
+
+  for (i = 0; i < G_N_ELEMENTS (kmodes); i++) {
+    if (kmodes[i].keymode == m)
+      return (GstDecklinkKeyerMode) i;
+  }
+  g_assert_not_reached ();
+  return GST_DECKLINK_KEYER_MODE_OFF;
+}
+
 static const BMDVideoConnection connections[] = {
-  0,                            /* auto */
+  (BMDVideoConnection) 0,       /* auto */
   bmdVideoConnectionSDI,
   bmdVideoConnectionHDMI,
   bmdVideoConnectionOpticalSDI,
@@ -315,37 +522,63 @@ gst_decklink_get_connection (GstDecklinkConnectionEnum e)
   return connections[e];
 }
 
+static gboolean
+gst_decklink_caps_get_pixel_format (GstCaps * caps, BMDPixelFormat * format)
+{
+  GstVideoInfo vinfo;
+  GstVideoFormat f;
+
+  if (gst_video_info_from_caps (&vinfo, caps) == FALSE) {
+    GST_ERROR ("Could not get video info from caps: %" GST_PTR_FORMAT, caps);
+    return FALSE;
+  }
+
+  f = vinfo.finfo->format;
+  return gst_decklink_type_from_video_format (f);
+}
+
 static GstStructure *
-gst_decklink_mode_get_structure (GstDecklinkModeEnum e, BMDPixelFormat f)
+gst_decklink_mode_get_structure (GstDecklinkModeEnum e, BMDPixelFormat f,
+    gboolean input)
 {
   const GstDecklinkMode *mode = &modes[e];
   GstStructure *s = gst_structure_new ("video/x-raw",
       "width", G_TYPE_INT, mode->width,
       "height", G_TYPE_INT, mode->height,
       "pixel-aspect-ratio", GST_TYPE_FRACTION, mode->par_n, mode->par_d,
-      "interlace-mode", G_TYPE_STRING, mode->interlaced ? "interleaved" : "progressive",
+      "interlace-mode", G_TYPE_STRING,
+      mode->interlaced ? "interleaved" : "progressive",
       "framerate", GST_TYPE_FRACTION, mode->fps_n, mode->fps_d, NULL);
 
+  if (input && mode->interlaced) {
+    if (mode->tff)
+      gst_structure_set (s, "field-order", G_TYPE_STRING, "top-field-first",
+          NULL);
+    else
+      gst_structure_set (s, "field-order", G_TYPE_STRING, "bottom-field-first",
+          NULL);
+  }
+
   switch (f) {
-    case bmdFormat8BitYUV: /* '2vuy' */
+    case bmdFormat8BitYUV:     /* '2vuy' */
       gst_structure_set (s, "format", G_TYPE_STRING, "UYVY",
           "colorimetry", G_TYPE_STRING, mode->colorimetry,
           "chroma-site", G_TYPE_STRING, "mpeg2", NULL);
       break;
-    case bmdFormat10BitYUV: /* 'v210' */
+    case bmdFormat10BitYUV:    /* 'v210' */
       gst_structure_set (s, "format", G_TYPE_STRING, "v210", NULL);
       break;
-    case bmdFormat8BitARGB: /* 'ARGB' */
+    case bmdFormat8BitARGB:    /* 'ARGB' */
       gst_structure_set (s, "format", G_TYPE_STRING, "ARGB", NULL);
       break;
-    case bmdFormat8BitBGRA: /* 'BGRA' */
+    case bmdFormat8BitBGRA:    /* 'BGRA' */
       gst_structure_set (s, "format", G_TYPE_STRING, "BGRA", NULL);
       break;
-    case bmdFormat10BitRGB: /* 'r210' Big-endian RGB 10-bit per component with SMPTE video levels (64-960). Packed as 2:10:10:10 */
-    case bmdFormat12BitRGB: /* 'R12B' Big-endian RGB 12-bit per component with full range (0-4095). Packed as 12-bit per component */
-    case bmdFormat12BitRGBLE: /* 'R12L' Little-endian RGB 12-bit per component with full range (0-4095). Packed as 12-bit per component */
+    case bmdFormat10BitRGB:    /* 'r210' Big-endian RGB 10-bit per component with SMPTE video levels (64-960). Packed as 2:10:10:10 */
+    case bmdFormat12BitRGB:    /* 'R12B' Big-endian RGB 12-bit per component with full range (0-4095). Packed as 12-bit per component */
+    case bmdFormat12BitRGBLE:  /* 'R12L' Little-endian RGB 12-bit per component with full range (0-4095). Packed as 12-bit per component */
     case bmdFormat10BitRGBXLE: /* 'R10l' Little-endian 10-bit RGB with SMPTE video levels (64-940) */
-    case bmdFormat10BitRGBX: /* 'R10b' Big-endian 10-bit RGB with SMPTE video levels (64-940) */
+    case bmdFormat10BitRGBX:   /* 'R10b' Big-endian 10-bit RGB with SMPTE video levels (64-940) */
     default:
       GST_WARNING ("format not supported %d", f);
       gst_structure_free (s);
@@ -357,18 +590,36 @@ gst_decklink_mode_get_structure (GstDecklinkModeEnum e, BMDPixelFormat f)
 }
 
 GstCaps *
-gst_decklink_mode_get_caps (GstDecklinkModeEnum e, BMDPixelFormat f)
+gst_decklink_mode_get_caps (GstDecklinkModeEnum e, BMDPixelFormat f,
+    gboolean input)
 {
   GstCaps *caps;
 
   caps = gst_caps_new_empty ();
-  gst_caps_append_structure (caps, gst_decklink_mode_get_structure (e, f));
+  caps =
+      gst_caps_merge_structure (caps, gst_decklink_mode_get_structure (e, f,
+          input));
 
   return caps;
 }
 
 GstCaps *
-gst_decklink_mode_get_template_caps (void)
+gst_decklink_mode_get_caps_all_formats (GstDecklinkModeEnum e, gboolean input)
+{
+  GstCaps *caps;
+  guint i;
+
+  caps = gst_caps_new_empty ();
+  for (i = 1; i < G_N_ELEMENTS (formats); i++)
+    caps =
+        gst_caps_merge_structure (caps, gst_decklink_mode_get_structure (e,
+            formats[i].format, input));
+
+  return caps;
+}
+
+GstCaps *
+gst_decklink_pixel_format_get_caps (BMDPixelFormat f, gboolean input)
 {
   int i;
   GstCaps *caps;
@@ -376,23 +627,43 @@ gst_decklink_mode_get_template_caps (void)
 
   caps = gst_caps_new_empty ();
   for (i = 1; i < (int) G_N_ELEMENTS (modes); i++) {
-    s = gst_decklink_mode_get_structure ((GstDecklinkModeEnum) i, bmdFormat8BitYUV);
-    gst_caps_append_structure (caps, s);
-    s = gst_decklink_mode_get_structure ((GstDecklinkModeEnum) i, bmdFormat8BitARGB);
-    gst_caps_append_structure (caps, s);
+    s = gst_decklink_mode_get_structure ((GstDecklinkModeEnum) i, f, input);
+    caps = gst_caps_merge_structure (caps, s);
   }
 
   return caps;
 }
 
+GstCaps *
+gst_decklink_mode_get_template_caps (gboolean input)
+{
+  int i;
+  GstCaps *caps;
+
+  caps = gst_caps_new_empty ();
+  for (i = 1; i < (int) G_N_ELEMENTS (modes); i++)
+    caps =
+        gst_caps_merge (caps,
+        gst_decklink_mode_get_caps_all_formats ((GstDecklinkModeEnum) i,
+            input));
+
+  return caps;
+}
+
 const GstDecklinkMode *
-gst_decklink_find_mode_for_caps (GstCaps * caps)
+gst_decklink_find_mode_and_format_for_caps (GstCaps * caps,
+    BMDPixelFormat * format)
 {
   int i;
   GstCaps *mode_caps;
 
+  g_return_val_if_fail (gst_caps_is_fixed (caps), NULL);
+  if (!gst_decklink_caps_get_pixel_format (caps, format))
+    return NULL;
+
   for (i = 1; i < (int) G_N_ELEMENTS (modes); i++) {
-    mode_caps = gst_decklink_mode_get_caps ((GstDecklinkModeEnum) i, bmdFormat8BitYUV);
+    mode_caps =
+        gst_decklink_mode_get_caps ((GstDecklinkModeEnum) i, *format, FALSE);
     if (gst_caps_can_intersect (caps, mode_caps)) {
       gst_caps_unref (mode_caps);
       return gst_decklink_get_mode ((GstDecklinkModeEnum) i);
@@ -401,6 +672,14 @@ gst_decklink_find_mode_for_caps (GstCaps * caps)
   }
 
   return NULL;
+}
+
+const GstDecklinkMode *
+gst_decklink_find_mode_for_caps (GstCaps * caps)
+{
+  BMDPixelFormat format;
+
+  return gst_decklink_find_mode_and_format_for_caps (caps, &format);
 }
 
 #define GST_TYPE_DECKLINK_CLOCK \
@@ -423,7 +702,6 @@ struct _GstDecklinkClock
 {
   GstSystemClock clock;
 
-  GstDecklinkInput *input;
   GstDecklinkOutput *output;
 };
 
@@ -528,72 +806,266 @@ public:
     GstElement *videosrc = NULL, *audiosrc = NULL;
     void (*got_video_frame) (GstElement * videosrc,
         IDeckLinkVideoInputFrame * frame, GstDecklinkModeEnum mode,
-        GstClockTime capture_time, GstClockTime capture_duration) = NULL;
+        GstClockTime capture_time, GstClockTime stream_time,
+        GstClockTime stream_duration, GstClockTime hardware_time,
+        GstClockTime hardware_duration, IDeckLinkTimecode * dtc,
+        gboolean no_signal) = NULL;
     void (*got_audio_packet) (GstElement * videosrc,
-        IDeckLinkAudioInputPacket * packet, GstClockTime capture_time, gboolean discont) = NULL;
+        IDeckLinkAudioInputPacket * packet, GstClockTime capture_time,
+        GstClockTime stream_time, GstClockTime stream_duration,
+        GstClockTime hardware_time, GstClockTime hardware_duration,
+        gboolean no_signal) = NULL;
     GstDecklinkModeEnum mode;
-    BMDTimeValue capture_time = GST_CLOCK_TIME_NONE, capture_duration = GST_CLOCK_TIME_NONE;
+    GstClockTime capture_time = GST_CLOCK_TIME_NONE;
+    GstClockTime base_time = 0;
+    gboolean no_signal = FALSE;
+    GstClock *clock = NULL;
     HRESULT res;
-
-    if (video_frame == NULL)
-      goto no_video_frame;
-
-    res =
-        video_frame->GetHardwareReferenceTimestamp (GST_SECOND, &capture_time,
-        &capture_duration);
-    if (res != S_OK) {
-      GST_ERROR ("Failed to get capture time: 0x%08x", res);
-      capture_time = GST_CLOCK_TIME_NONE;
-      capture_duration = GST_CLOCK_TIME_NONE;
-    }
+    BMDTimeValue stream_time = GST_CLOCK_TIME_NONE;
+    BMDTimeValue stream_duration = GST_CLOCK_TIME_NONE;
+    BMDTimeValue hardware_time = GST_CLOCK_TIME_NONE;
+    BMDTimeValue hardware_duration = GST_CLOCK_TIME_NONE;
 
     g_mutex_lock (&m_input->lock);
-
-    if (capture_time > (BMDTimeValue) m_input->clock_start_time)
-      capture_time -= m_input->clock_start_time;
-    else
-      capture_time = 0;
-
-    if (capture_time > (BMDTimeValue) m_input->clock_offset)
-      capture_time -= m_input->clock_offset;
-    else
-      capture_time = 0;
-
     if (m_input->videosrc) {
       videosrc = GST_ELEMENT_CAST (gst_object_ref (m_input->videosrc));
+      clock = gst_element_get_clock (videosrc);
+      base_time = gst_element_get_base_time (videosrc);
       got_video_frame = m_input->got_video_frame;
     }
     mode = gst_decklink_get_mode_enum_from_bmd (m_input->mode->mode);
 
     if (m_input->audiosrc) {
       audiosrc = GST_ELEMENT_CAST (gst_object_ref (m_input->audiosrc));
+      if (!clock) {
+        clock = gst_element_get_clock (GST_ELEMENT_CAST (audiosrc));
+        base_time = gst_element_get_base_time (audiosrc);
+      }
       got_audio_packet = m_input->got_audio_packet;
     }
     g_mutex_unlock (&m_input->lock);
 
-    if (got_video_frame && videosrc) {
-      got_video_frame (videosrc, video_frame, mode, capture_time,
-          capture_duration);
+    if (clock) {
+      capture_time = gst_clock_get_time (clock);
+      if (capture_time > base_time)
+        capture_time -= base_time;
+      else
+        capture_time = 0;
     }
 
-no_video_frame:
+    if (video_frame) {
+      BMDFrameFlags flags;
+
+      flags = video_frame->GetFlags ();
+      if (flags & bmdFrameHasNoInputSource) {
+        no_signal = TRUE;
+      }
+    }
+
+    if (got_video_frame && videosrc && video_frame) {
+      IDeckLinkTimecode *dtc = 0;
+
+      res =
+          video_frame->GetStreamTime (&stream_time, &stream_duration,
+          GST_SECOND);
+      if (res != S_OK) {
+        GST_ERROR ("Failed to get stream time: 0x%08lx", (unsigned long) res);
+        stream_time = GST_CLOCK_TIME_NONE;
+        stream_duration = GST_CLOCK_TIME_NONE;
+      }
+
+      res =
+          video_frame->GetHardwareReferenceTimestamp (GST_SECOND,
+          &hardware_time, &hardware_duration);
+      if (res != S_OK) {
+        GST_ERROR ("Failed to get hardware time: 0x%08lx", (unsigned long) res);
+        hardware_time = GST_CLOCK_TIME_NONE;
+        hardware_duration = GST_CLOCK_TIME_NONE;
+      }
+
+      if (m_input->videosrc) {
+        /* FIXME: Avoid circularity between gstdecklink.cpp and
+         * gstdecklinkvideosrc.cpp */
+        res =
+            video_frame->
+            GetTimecode (GST_DECKLINK_VIDEO_SRC (videosrc)->timecode_format,
+            &dtc);
+
+        if (res != S_OK) {
+          GST_DEBUG_OBJECT (videosrc, "Failed to get timecode: 0x%08lx",
+              (unsigned long) res);
+          dtc = NULL;
+        }
+      }
+
+      /* passing dtc reference */
+      got_video_frame (videosrc, video_frame, mode, capture_time,
+          stream_time, stream_duration, hardware_time, hardware_duration, dtc,
+          no_signal);
+    }
+
     if (got_audio_packet && audiosrc && audio_packet) {
-      m_input->got_audio_packet (audiosrc, audio_packet, capture_time, m_input->audio_discont);
-      m_input->audio_discont = FALSE;
+      m_input->got_audio_packet (audiosrc, audio_packet, capture_time,
+          stream_time, stream_duration, hardware_time, hardware_duration,
+          no_signal);
     } else {
-      m_input->audio_discont = TRUE;
       if (!audio_packet)
-        GST_DEBUG ("Received no audio packet at %" GST_TIME_FORMAT, GST_TIME_ARGS (capture_time));
+        GST_DEBUG ("Received no audio packet at %" GST_TIME_FORMAT,
+            GST_TIME_ARGS (capture_time));
     }
 
     gst_object_replace ((GstObject **) & videosrc, NULL);
     gst_object_replace ((GstObject **) & audiosrc, NULL);
+    gst_object_replace ((GstObject **) & clock, NULL);
 
     return S_OK;
   }
 };
 
-#ifdef _MSC_VER
+class GStreamerDecklinkMemoryAllocator:public IDeckLinkMemoryAllocator
+{
+private:
+  GMutex m_mutex;
+  uint32_t m_lastBufferSize;
+  uint32_t m_nonEmptyCalls;
+  GstQueueArray *m_buffers;
+  gint m_refcount;
+
+  void _clearBufferPool ()
+  {
+    uint8_t *buf;
+
+    if (!m_buffers)
+        return;
+
+    while ((buf = (uint8_t *) gst_queue_array_pop_head (m_buffers)))
+      g_free (buf - 128);
+  }
+
+public:
+    GStreamerDecklinkMemoryAllocator ()
+  : IDeckLinkMemoryAllocator (),
+      m_lastBufferSize (0),
+      m_nonEmptyCalls (0), m_buffers (NULL), m_refcount (1)
+  {
+    g_mutex_init (&m_mutex);
+
+    m_buffers = gst_queue_array_new (60);
+  }
+
+  virtual ~ GStreamerDecklinkMemoryAllocator () {
+    Decommit ();
+
+    gst_queue_array_free (m_buffers);
+
+    g_mutex_clear (&m_mutex);
+  }
+
+  virtual HRESULT STDMETHODCALLTYPE QueryInterface (REFIID, LPVOID *)
+  {
+    return E_NOINTERFACE;
+  }
+
+  virtual ULONG STDMETHODCALLTYPE AddRef (void)
+  {
+    ULONG ret;
+
+    g_mutex_lock (&m_mutex);
+    m_refcount++;
+    ret = m_refcount;
+    g_mutex_unlock (&m_mutex);
+
+    return ret;
+  }
+
+  virtual ULONG STDMETHODCALLTYPE Release (void)
+  {
+    ULONG ret;
+
+    g_mutex_lock (&m_mutex);
+    m_refcount--;
+    ret = m_refcount;
+    g_mutex_unlock (&m_mutex);
+
+
+    if (ret == 0) {
+      delete this;
+    }
+
+    return ret;
+  }
+
+  virtual HRESULT STDMETHODCALLTYPE
+      AllocateBuffer (uint32_t bufferSize, void **allocatedBuffer)
+  {
+    uint8_t *buf;
+
+    g_mutex_lock (&m_mutex);
+
+    /* If buffer size changed since last call, empty buffer pool */
+    if (bufferSize != m_lastBufferSize) {
+      _clearBufferPool ();
+      m_lastBufferSize = bufferSize;
+    }
+
+    /* Look if there is a free buffer in the pool */
+    if (!(buf = (uint8_t *) gst_queue_array_pop_head (m_buffers))) {
+      /* If not, alloc a new one */
+      buf = (uint8_t *) g_malloc (bufferSize + 128);
+      *((uint32_t *) buf) = bufferSize;
+      buf += 128;
+    }
+    *allocatedBuffer = (void *) buf;
+
+    /* If there are still unused buffers in the pool
+     * remove one of them every fifth call */
+    if (gst_queue_array_get_length (m_buffers) > 0) {
+      if (++m_nonEmptyCalls >= 5) {
+        buf = (uint8_t *) gst_queue_array_pop_head (m_buffers) - 128;
+        g_free (buf);
+        m_nonEmptyCalls = 0;
+      }
+    } else {
+      m_nonEmptyCalls = 0;
+    }
+
+    g_mutex_unlock (&m_mutex);
+
+    return S_OK;
+  }
+
+  virtual HRESULT STDMETHODCALLTYPE ReleaseBuffer (void *buffer)
+  {
+    g_mutex_lock (&m_mutex);
+
+    /* Put the buffer back to the pool if size matches with current pool */
+    uint32_t size = *(uint32_t *) ((uint8_t *) buffer - 128);
+    if (size == m_lastBufferSize) {
+      gst_queue_array_push_tail (m_buffers, buffer);
+    } else {
+      g_free (((uint8_t *) buffer) - 128);
+    }
+
+    g_mutex_unlock (&m_mutex);
+
+    return S_OK;
+  }
+
+  virtual HRESULT STDMETHODCALLTYPE Commit ()
+  {
+    return S_OK;
+  }
+
+  virtual HRESULT STDMETHODCALLTYPE Decommit ()
+  {
+    /* Clear all remaining pools */
+    _clearBufferPool ();
+
+    return S_OK;
+  }
+};
+
+#ifdef G_OS_WIN32
 /* FIXME: We currently never deinit this */
 
 static GMutex com_init_lock;
@@ -642,11 +1114,10 @@ gst_decklink_com_thread (gpointer data)
 
   return NULL;
 }
-#endif /* _MSC_VER */
+#endif /* G_OS_WIN32 */
 
 static GOnce devices_once = G_ONCE_INIT;
-static int n_devices;
-static Device devices[10];
+static GPtrArray *devices;      /* array of Device */
 
 static gpointer
 init_devices (gpointer data)
@@ -656,18 +1127,18 @@ init_devices (gpointer data)
   HRESULT ret;
   int i;
 
-#ifdef _MSC_VER
+#ifdef G_OS_WIN32
   // Start COM thread for Windows
 
   g_mutex_lock (&com_init_lock);
 
   /* create the COM initialization thread */
-  g_thread_create ((GThreadFunc) gst_decklink_com_thread, NULL, FALSE, NULL);
+  g_thread_new ("COM init thread", (GThreadFunc) gst_decklink_com_thread, NULL);
 
   /* wait until the COM thread signals that COM has been initialized */
   g_cond_wait (&com_init_cond, &com_init_lock);
   g_mutex_unlock (&com_init_lock);
-#endif /* _MSC_VER */
+#endif /* G_OS_WIN32 */
 
   iterator = CreateDeckLinkIteratorInstance ();
   if (iterator == NULL) {
@@ -675,57 +1146,132 @@ init_devices (gpointer data)
     return NULL;
   }
 
+  devices = g_ptr_array_new ();
+
   i = 0;
   ret = iterator->Next (&decklink);
   while (ret == S_OK) {
+    Device *dev;
+
+    dev = g_new0 (Device, 1);
+
+    g_mutex_init (&dev->input.lock);
+    g_mutex_init (&dev->output.lock);
+    g_cond_init (&dev->output.cond);
+
     ret = decklink->QueryInterface (IID_IDeckLinkInput,
-        (void **) &devices[i].input.input);
+        (void **) &dev->input.input);
     if (ret != S_OK) {
-      GST_WARNING ("selected device does not have input interface");
+      GST_WARNING ("selected device does not have input interface: 0x%08lx",
+          (unsigned long) ret);
     } else {
-      devices[i].input.device = decklink;
-      devices[i].input.clock = gst_decklink_clock_new ("GstDecklinkInputClock");
-      GST_DECKLINK_CLOCK_CAST (devices[i].input.clock)->input =
-          &devices[i].input;
-      devices[i].input.
-          input->SetCallback (new GStreamerDecklinkInputCallback (&devices[i].
-              input));
+      IDeckLinkDisplayModeIterator *mode_iter;
+
+      dev->input.device = decklink;
+      dev->input.input->
+          SetCallback (new GStreamerDecklinkInputCallback (&dev->input));
+
+      if ((ret = dev->input.input->GetDisplayModeIterator (&mode_iter)) == S_OK) {
+        IDeckLinkDisplayMode *mode;
+
+        GST_DEBUG ("Input %d supports:", i);
+        while ((ret = mode_iter->Next (&mode)) == S_OK) {
+          char *name;
+
+          mode->GetName ((COMSTR_T *) & name);
+          CONVERT_COM_STRING (name);
+          GST_DEBUG ("    %s mode: 0x%08x width: %ld height: %ld"
+              " fields: 0x%08x flags: 0x%08x", name,
+              (int) mode->GetDisplayMode (), mode->GetWidth (),
+              mode->GetHeight (), (int) mode->GetFieldDominance (),
+              (int) mode->GetFlags ());
+          FREE_COM_STRING (name);
+          mode->Release ();
+        }
+        mode_iter->Release ();
+      }
+      ret = S_OK;
     }
 
     ret = decklink->QueryInterface (IID_IDeckLinkOutput,
-        (void **) &devices[i].output.output);
+        (void **) &dev->output.output);
     if (ret != S_OK) {
-      GST_WARNING ("selected device does not have output interface");
+      GST_WARNING ("selected device does not have output interface: 0x%08lx",
+          (unsigned long) ret);
     } else {
-      devices[i].output.device = decklink;
-      devices[i].output.clock =
-          gst_decklink_clock_new ("GstDecklinkOutputClock");
-      GST_DECKLINK_CLOCK_CAST (devices[i].output.clock)->output =
-          &devices[i].output;
+      IDeckLinkDisplayModeIterator *mode_iter;
+
+      dev->output.device = decklink;
+      dev->output.clock = gst_decklink_clock_new ("GstDecklinkOutputClock");
+      GST_DECKLINK_CLOCK_CAST (dev->output.clock)->output = &dev->output;
+
+      if ((ret =
+              dev->output.output->GetDisplayModeIterator (&mode_iter)) ==
+          S_OK) {
+        IDeckLinkDisplayMode *mode;
+
+        GST_DEBUG ("Output %d supports:", i);
+        while ((ret = mode_iter->Next (&mode)) == S_OK) {
+          char *name;
+
+          mode->GetName ((COMSTR_T *) & name);
+          CONVERT_COM_STRING (name);
+          GST_DEBUG ("    %s mode: 0x%08x width: %ld height: %ld"
+              " fields: 0x%08x flags: 0x%08x", name,
+              (int) mode->GetDisplayMode (), mode->GetWidth (),
+              mode->GetHeight (), (int) mode->GetFieldDominance (),
+              (int) mode->GetFlags ());
+          FREE_COM_STRING (name);
+          mode->Release ();
+        }
+        mode_iter->Release ();
+      }
+      ret = S_OK;
     }
 
     ret = decklink->QueryInterface (IID_IDeckLinkConfiguration,
-        (void **) &devices[i].input.config);
+        (void **) &dev->input.config);
     if (ret != S_OK) {
-      GST_WARNING ("selected device does not have config interface");
+      GST_WARNING ("selected device does not have config interface: 0x%08lx",
+          (unsigned long) ret);
+    } else {
+      char *serial_number;
+
+      ret =
+          dev->input.
+          config->GetString (bmdDeckLinkConfigDeviceInformationSerialNumber,
+          (COMSTR_T *) & serial_number);
+      if (ret == S_OK) {
+        CONVERT_COM_STRING (serial_number);
+        dev->output.hw_serial_number = g_strdup (serial_number);
+        dev->input.hw_serial_number = g_strdup (serial_number);
+        GST_DEBUG ("device %d has serial number %s", i, serial_number);
+        FREE_COM_STRING (serial_number);
+      }
     }
 
     ret = decklink->QueryInterface (IID_IDeckLinkAttributes,
-        (void **) &devices[i].input.attributes);
+        (void **) &dev->input.attributes);
+    dev->output.attributes = dev->input.attributes;
     if (ret != S_OK) {
-      GST_WARNING ("selected device does not have attributes interface");
+      GST_WARNING ("selected device does not have attributes interface: "
+          "0x%08lx", (unsigned long) ret);
     }
+
+    ret = decklink->QueryInterface (IID_IDeckLinkKeyer,
+        (void **) &dev->output.keyer);
+
+    g_ptr_array_add (devices, dev);
+
+    /* We only warn of failure to obtain the keyer interface if the keyer
+     * is enabled by keyer_mode
+     */
 
     ret = iterator->Next (&decklink);
     i++;
-
-    if (i == 10) {
-      GST_WARNING ("this hardware has more then 10 devices");
-      break;
-    }
   }
 
-  n_devices = i;
+  GST_INFO ("Detected %u devices", devices->len);
 
   iterator->Release ();
 
@@ -736,13 +1282,18 @@ GstDecklinkOutput *
 gst_decklink_acquire_nth_output (gint n, GstElement * sink, gboolean is_audio)
 {
   GstDecklinkOutput *output;
+  Device *device;
 
   g_once (&devices_once, init_devices, NULL);
 
-  if (n >= n_devices)
+  if (devices == NULL)
     return NULL;
 
-  output = &devices[n].output;
+  if (n < 0 || (guint) n >= devices->len)
+    return NULL;
+
+  device = (Device *) g_ptr_array_index (devices, n);
+  output = &device->output;
   if (!output->output) {
     GST_ERROR ("Device %d has no output", n);
     return NULL;
@@ -768,11 +1319,16 @@ void
 gst_decklink_release_nth_output (gint n, GstElement * sink, gboolean is_audio)
 {
   GstDecklinkOutput *output;
+  Device *device;
 
-  if (n >= n_devices)
+  if (devices == NULL)
     return;
 
-  output = &devices[n].output;
+  if (n < 0 || (guint) n >= devices->len)
+    return;
+
+  device = (Device *) g_ptr_array_index (devices, n);
+  output = &device->output;
   g_assert (output->output);
 
   g_mutex_lock (&output->lock);
@@ -788,53 +1344,32 @@ gst_decklink_release_nth_output (gint n, GstElement * sink, gboolean is_audio)
   g_mutex_unlock (&output->lock);
 }
 
-void
-gst_decklink_output_set_audio_clock (GstDecklinkOutput * output,
-    GstClock * clock)
-{
-  g_mutex_lock (&output->lock);
-  if (output->audio_clock)
-    gst_object_unref (output->audio_clock);
-  output->audio_clock = clock;
-  if (clock)
-    gst_object_ref (clock);
-  g_mutex_unlock (&output->lock);
-}
-
-
-GstClock *
-gst_decklink_output_get_audio_clock (GstDecklinkOutput * output)
-{
-  GstClock *ret = NULL;
-
-  g_mutex_lock (&output->lock);
-  if (output->audio_clock)
-    ret = GST_CLOCK_CAST (gst_object_ref (output->audio_clock));
-  g_mutex_unlock (&output->lock);
-
-  return ret;
-}
-
 GstDecklinkInput *
 gst_decklink_acquire_nth_input (gint n, GstElement * src, gboolean is_audio)
 {
   GstDecklinkInput *input;
+  Device *device;
 
   g_once (&devices_once, init_devices, NULL);
 
-  if (n >= n_devices)
+  if (devices == NULL)
     return NULL;
 
-  input = &devices[n].input;
+  if (n < 0 || (guint) n >= devices->len)
+    return NULL;
+
+  device = (Device *) g_ptr_array_index (devices, n);
+  input = &device->input;
   if (!input->input) {
     GST_ERROR ("Device %d has no input", n);
     return NULL;
   }
 
   g_mutex_lock (&input->lock);
+  input->input->SetVideoInputFrameMemoryAllocator (new
+      GStreamerDecklinkMemoryAllocator);
   if (is_audio && !input->audiosrc) {
     input->audiosrc = GST_ELEMENT_CAST (gst_object_ref (src));
-    input->audio_discont = TRUE;
     g_mutex_unlock (&input->lock);
     return input;
   } else if (!input->videosrc) {
@@ -852,11 +1387,17 @@ void
 gst_decklink_release_nth_input (gint n, GstElement * src, gboolean is_audio)
 {
   GstDecklinkInput *input;
+  Device *device;
 
-  if (n >= n_devices)
+  if (devices == NULL)
     return;
 
-  input = &devices[n].input;
+  if (n < 0 || (guint) n >= devices->len)
+    return;
+
+  device = (Device *) g_ptr_array_index (devices, n);
+
+  input = &device->input;
   g_assert (input->input);
 
   g_mutex_lock (&input->lock);
@@ -897,6 +1438,8 @@ gst_decklink_clock_new (const gchar * name)
       GST_DECKLINK_CLOCK (g_object_new (GST_TYPE_DECKLINK_CLOCK, "name", name,
           "clock-type", GST_CLOCK_TYPE_OTHER, NULL));
 
+  gst_object_ref_sink (self);
+
   return GST_CLOCK_CAST (self);
 }
 
@@ -909,94 +1452,52 @@ gst_decklink_clock_get_internal_time (GstClock * clock)
   BMDTimeValue time;
   HRESULT ret;
 
-  if (self->input != NULL) {
-    g_mutex_lock (&self->input->lock);
-    start_time = self->input->clock_start_time;
-    offset = self->input->clock_offset;
-    last_time = self->input->clock_last_time;
-    time = -1;
-    if (!self->input->started) {
-      result = last_time;
-      ret = -1;
-    } else {
-      ret =
-          self->input->input->GetHardwareReferenceClock (GST_SECOND, &time,
-          NULL, NULL);
-      if (ret == S_OK && time >= 0) {
-        result = time;
-        if (start_time == GST_CLOCK_TIME_NONE)
-          start_time = self->input->clock_start_time = result;
-
-        if (result > start_time)
-          result -= start_time;
-        else
-          result = 0;
-
-        if (self->input->clock_restart) {
-          self->input->clock_offset = result - last_time;
-          offset = self->input->clock_offset;
-          self->input->clock_restart = FALSE;
-        }
-        result = MAX (last_time, result);
-        result -= offset;
-        result = MAX (last_time, result);
-      } else {
-        result = last_time;
-      }
-
-      self->input->clock_last_time = result;
-    }
-    result += self->input->clock_epoch;
-    g_mutex_unlock (&self->input->lock);
-  } else if (self->output != NULL) {
-    g_mutex_lock (&self->output->lock);
-    start_time = self->output->clock_start_time;
-    offset = self->output->clock_offset;
-    last_time = self->output->clock_last_time;
-    time = -1;
-    if (!self->output->started) {
-      result = last_time;
-      ret = -1;
-    } else {
-      ret =
-          self->output->output->GetHardwareReferenceClock (GST_SECOND, &time,
-          NULL, NULL);
-      if (ret == S_OK && time >= 0) {
-        result = time;
-
-        if (start_time == GST_CLOCK_TIME_NONE)
-          start_time = self->output->clock_start_time = result;
-
-        if (result > start_time)
-          result -= start_time;
-        else
-          result = 0;
-
-        if (self->output->clock_restart) {
-          self->output->clock_offset = result - last_time;
-          offset = self->output->clock_offset;
-          self->output->clock_restart = FALSE;
-        }
-        result = MAX (last_time, result);
-        result -= offset;
-        result = MAX (last_time, result);
-      } else {
-        result = last_time;
-      }
-
-      self->output->clock_last_time = result;
-    }
-    result += self->output->clock_epoch;
-    g_mutex_unlock (&self->output->lock);
+  g_mutex_lock (&self->output->lock);
+  start_time = self->output->clock_start_time;
+  offset = self->output->clock_offset;
+  last_time = self->output->clock_last_time;
+  time = -1;
+  if (!self->output->started) {
+    result = last_time;
+    ret = -1;
   } else {
-    g_assert_not_reached ();
+    ret =
+        self->output->output->GetHardwareReferenceClock (GST_SECOND, &time,
+        NULL, NULL);
+    if (ret == S_OK && time >= 0) {
+      result = time;
+
+      if (start_time == GST_CLOCK_TIME_NONE)
+        start_time = self->output->clock_start_time = result;
+
+      if (result > start_time)
+        result -= start_time;
+      else
+        result = 0;
+
+      if (self->output->clock_restart) {
+        self->output->clock_offset = result - last_time;
+        offset = self->output->clock_offset;
+        self->output->clock_restart = FALSE;
+      }
+      result = MAX (last_time, result);
+      result -= offset;
+      result = MAX (last_time, result);
+    } else {
+      result = last_time;
+    }
+
+    self->output->clock_last_time = result;
   }
+  result += self->output->clock_epoch;
+  g_mutex_unlock (&self->output->lock);
+
   GST_LOG_OBJECT (clock,
       "result %" GST_TIME_FORMAT " time %" GST_TIME_FORMAT " last time %"
       GST_TIME_FORMAT " offset %" GST_TIME_FORMAT " start time %"
-      GST_TIME_FORMAT " (ret: 0x%08x)", GST_TIME_ARGS (result),
+      GST_TIME_FORMAT " (ret: 0x%08lx)", GST_TIME_ARGS (result),
       GST_TIME_ARGS (time), GST_TIME_ARGS (last_time), GST_TIME_ARGS (offset),
-      GST_TIME_ARGS (start_time), ret);
+      GST_TIME_ARGS (start_time), (unsigned long) ret);
 
   return result;
 }

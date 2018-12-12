@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007 Haakon Sporsheim <hakon.sporsheim@tandberg.com>
- *               2008 Ole André Vadla Ravnås <ole.andre.ravnas@tandberg.com>
+ *               2008 Ole AndrÃ© Vadla RavnÃ¥s <ole.andre.ravnas@tandberg.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -49,6 +49,7 @@ struct _KsVideoMediaType
   guint sample_size;
 
   GstCaps * translated_caps;
+  gboolean is_rgb;
 };
 
 typedef struct DVINFO {

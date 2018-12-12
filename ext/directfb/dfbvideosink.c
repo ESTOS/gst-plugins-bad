@@ -20,66 +20,52 @@
 
 /**
  * SECTION:element-dfbvideosink
+ * @title: dfbvideosink
  *
  * DfbVideoSink renders video frames using the
  * <ulink url="http://www.directfb.org/">DirectFB</ulink> library.
  * Rendering can happen in two different modes :
- * <itemizedlist>
- * <listitem>
- *   <para>
- *   Standalone: this mode will take complete control of the monitor forcing
+ *
+ * * Standalone: this mode will take complete control of the monitor forcing
  *   <ulink url="http://www.directfb.org/">DirectFB</ulink> to fullscreen layout.
  *   This is convenient to test using the  gst-launch-1.0 command line tool or
  *   other simple applications. It is possible to interrupt playback while
  *   being in this mode by pressing the Escape key.
- *   </para>
- *   <para>
  *   This mode handles navigation events for every input device supported by
  *   the <ulink url="http://www.directfb.org/">DirectFB</ulink> library, it will
  *   look for available video modes in the fb.modes file and try to switch
- *   the framebuffer video mode to the most suitable one. Depending on 
+ *   the framebuffer video mode to the most suitable one. Depending on
  *   hardware acceleration capabilities the element will handle scaling or not.
  *   If no acceleration is available it will do clipping or centering of the
  *   video frames respecting the original aspect ratio.
- *   </para>
- * </listitem>
- * <listitem>
- *   <para>
- *   Embedded: this mode will render video frames in a 
+ *
+ * * Embedded: this mode will render video frames in a
  *   #GstDfbVideoSink:surface provided by the
  *   application developer. This is a more advanced usage of the element and
- *   it is required to integrate video playback in existing 
+ *   it is required to integrate video playback in existing
  *   <ulink url="http://www.directfb.org/">DirectFB</ulink> applications.
- *   </para>
- *   <para>
  *   When using this mode the element just renders to the
- *   #GstDfbVideoSink:surface provided by the 
+ *   #GstDfbVideoSink:surface provided by the
  *   application, that means it won't handle navigation events and won't resize
  *   the #GstDfbVideoSink:surface to fit video
  *   frames geometry. Application has to implement the necessary code to grab
  *   informations about the negotiated geometry and resize there
  *   #GstDfbVideoSink:surface accordingly.
- *   </para>
- * </listitem>
- * </itemizedlist>
- * For both modes the element implements a buffer pool allocation system to 
- * optimize memory allocation time and handle reverse negotiation. Indeed if 
+ *
+ * For both modes the element implements a buffer pool allocation system to
+ * optimize memory allocation time and handle reverse negotiation. Indeed if
  * you insert an element like videoscale in the pipeline the video sink will
  * negotiate with it to try get a scaled video for either the fullscreen layout
  * or the application provided external #GstDfbVideoSink:surface.
  *
- * <refsect2>
- * <title>Example application</title>
- * <para>
+ * ## Example application
+ *
  * <include xmlns="http://www.w3.org/2003/XInclude" href="element-dfb-example.xml" />
- * </para>
- * </refsect2>
- * <refsect2>
- * <title>Example pipelines</title>
+ *
+ * ## Example pipelines
  * |[
  * gst-launch-1.0 -v videotestsrc ! dfbvideosink hue=20000 saturation=40000 brightness=25000
  * ]| test the colorbalance interface implementation in dfbvideosink
- * </refsect2>
  */
 
 #ifdef HAVE_CONFIG_H
@@ -168,6 +154,19 @@ gst_meta_dfbsurface_api_get_type (void)
   return type;
 }
 
+static gboolean
+gst_meta_dfbsurface_init (GstMetaDfbSurface * meta, gpointer params,
+    GstBuffer * buf)
+{
+  meta->surface = NULL;
+  meta->width = meta->height = 0;
+  meta->locked = FALSE;
+  meta->pixel_format = 0;
+  meta->dfbvideosink = NULL;
+
+  return TRUE;
+}
+
 /* our metadata */
 const GstMetaInfo *
 gst_meta_dfbsurface_get_info (void)
@@ -178,7 +177,8 @@ gst_meta_dfbsurface_get_info (void)
     const GstMetaInfo *meta =
         gst_meta_register (gst_meta_dfbsurface_api_get_type (),
         "GstMetaDfbSurface", sizeof (GstMetaDfbSurface),
-        (GstMetaInitFunction) NULL, (GstMetaFreeFunction) NULL,
+        (GstMetaInitFunction) gst_meta_dfbsurface_init,
+        (GstMetaFreeFunction) NULL,
         (GstMetaTransformFunction) NULL);
     g_once_init_leave (&meta_info, meta);
   }
@@ -466,6 +466,7 @@ gst_dfb_buffer_pool_new (GstDfbVideoSink * dfbvideosink)
   g_return_val_if_fail (GST_IS_DFBVIDEOSINK (dfbvideosink), NULL);
 
   pool = g_object_new (GST_TYPE_DFB_BUFFER_POOL, NULL);
+  g_object_ref_sink (pool);
   pool->dfbvideosink = gst_object_ref (dfbvideosink);
 
   GST_LOG_OBJECT (pool, "new dfb buffer pool %p", pool);
@@ -796,7 +797,7 @@ gst_dfbvideosink_setup (GstDfbVideoSink * dfbvideosink)
   dfbvideosink->backbuffer = FALSE;
   dfbvideosink->pixel_format = DSPF_UNKNOWN;
 
-  /* If we do it all by ourself we create the DirectFB context, get the 
+  /* If we do it all by ourself we create the DirectFB context, get the
      primary layer and use a fullscreen configuration */
   if (!dfbvideosink->ext_surface) {
     GST_DEBUG_OBJECT (dfbvideosink, "no external surface, taking over "
@@ -1848,6 +1849,7 @@ gst_dfbvideosink_show_frame (GstBaseSink * bsink, GstBuffer * buf)
     caps = gst_pad_get_current_caps (GST_BASE_SINK_PAD (bsink));
     if (!gst_video_info_from_caps (&src_info, caps)) {
       GST_WARNING_OBJECT (dfbvideosink, "failed getting video info");
+      gst_caps_unref (caps);
       ret = GST_FLOW_ERROR;
       goto beach;
     }
@@ -1855,6 +1857,7 @@ gst_dfbvideosink_show_frame (GstBaseSink * bsink, GstBuffer * buf)
     str = gst_structure_get_string (structure, "format");
     if (str == NULL) {
       GST_WARNING ("failed grabbing fourcc from caps %" GST_PTR_FORMAT, caps);
+      gst_caps_unref (caps);
       ret = GST_FLOW_ERROR;
       goto beach;
     }
@@ -2270,6 +2273,12 @@ gst_dfbvideosink_propose_allocation (GstBaseSink * bsink, GstQuery * query)
 
   gst_query_parse_allocation (query, &caps, &need_pool);
 
+  if (!caps) {
+    GST_WARNING_OBJECT (dfbvideosink, "Missing caps in allocation query.");
+    return FALSE;
+  }
+
+  /* FIXME re-using buffer pool breaks renegotiation */
   if ((pool = dfbvideosink->pool))
     gst_object_ref (pool);
 
@@ -2290,6 +2299,16 @@ gst_dfbvideosink_propose_allocation (GstBaseSink * bsink, GstQuery * query)
       return FALSE;
     }
     gst_structure_free (config);
+  } else {
+    GstVideoInfo info;
+
+    if (!gst_video_info_from_caps (&info, caps)) {
+      GST_WARNING_OBJECT (dfbvideosink,
+          "Invalid video caps in allocation query");
+      return FALSE;
+    }
+
+    size = info.size;
   }
 
   gst_query_add_allocation_pool (query, pool, size, 1, 0);
@@ -2420,8 +2439,8 @@ gst_dfbvideosink_class_init (GstDfbVideoSinkClass * klass)
       "DirectFB video sink", "Sink/Video", "A DirectFB based videosink",
       "Julien Moutte <julien@moutte.net>");
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_dfbvideosink_sink_template_factory));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &gst_dfbvideosink_sink_template_factory);
 
   gstelement_class->change_state = gst_dfbvideosink_change_state;
 

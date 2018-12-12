@@ -43,17 +43,17 @@
 
 /**
  * SECTION:element-fieldanalysis
+ * @title: fieldanalysis
  *
  * Analyse fields from video buffers to identify whether the buffers are
  * progressive/telecined/interlaced and, if telecined, the telecine pattern
  * used.
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 -v uridecodebin uri=/path/to/foo.bar ! fieldanalysis ! deinterlace ! videoconvert ! autovideosink
  * ]| This pipeline will analyse a video stream with default metrics and thresholds and output progressive frames.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -284,10 +284,8 @@ gst_field_analysis_class_init (GstFieldAnalysisClass * klass)
       "Analyse fields from video frames to identify if they are progressive/telecined/interlaced",
       "Robert Swain <robert.swain@collabora.co.uk>");
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&src_factory));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&sink_factory));
+  gst_element_class_add_static_pad_template (gstelement_class, &src_factory);
+  gst_element_class_add_static_pad_template (gstelement_class, &sink_factory);
 
 }
 
@@ -1444,7 +1442,7 @@ gst_field_analysis_process_buffer (GstFieldAnalysis * filter,
     /* compare the fields within the buffer, if the buffer exhibits combing it
      * could be interlaced or a mixed telecine frame */
     res0->f = filter->same_frame (filter, &history);
-    res0->t = res0->b = res0->t_b = res0->b_t = G_MAXINT64;
+    res0->t = res0->b = res0->t_b = res0->b_t = G_MAXFLOAT;
     if (filter->nframes == 1)
       GST_DEBUG_OBJECT (filter, "Scores: f %f, t , b , t_b , b_t ", res0->f);
     if (res0->f <= filter->frame_thresh) {
@@ -1852,4 +1850,4 @@ GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
     GST_VERSION_MINOR,
     fieldanalysis,
     "Video field analysis",
-    fieldanalysis_init, VERSION, "LGPL", "GStreamer", "http://gstreamer.net/")
+    fieldanalysis_init, VERSION, "LGPL", GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)

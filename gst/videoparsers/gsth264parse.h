@@ -71,6 +71,7 @@ struct _GstH264Parse
   /* state */
   GstH264NalParser *nalparser;
   guint state;
+  guint in_align;
   guint align;
   guint format;
   gint current_off;
@@ -118,7 +119,7 @@ struct _GstH264Parse
   gboolean picture_start;
 
   /* props */
-  guint interval;
+  gint interval;
 
   GstClockTime pending_key_unit_ts;
   GstEvent *force_key_unit_event;
@@ -127,6 +128,10 @@ struct _GstH264Parse
   GstVideoMultiviewMode multiview_mode;
   GstVideoMultiviewFlags multiview_flags;
   gboolean first_in_bundle;
+
+  /* For insertion of AU Delimiter */
+  gboolean aud_needed;
+  gboolean aud_insert;
 };
 
 struct _GstH264ParseClass

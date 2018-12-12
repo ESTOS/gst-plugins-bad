@@ -156,6 +156,8 @@ caps_to_mime (GstCaps * caps)
     return "audio/g711-mlaw";
   } else if (strcmp (name, "audio/x-vorbis") == 0) {
     return "audio/vorbis";
+  } else if (strcmp (name, "audio/x-opus") == 0) {
+    return "audio/opus";
   }
 
   return NULL;
@@ -493,10 +495,15 @@ retry:
   is_eos = ! !(buffer_info.flags & BUFFER_FLAG_END_OF_STREAM);
 
   buf = gst_amc_codec_get_output_buffer (self->codec, idx, &err);
-  if (err)
+  if (err) {
+    if (self->flushing) {
+      g_clear_error (&err);
+      goto flushing;
+    }
     goto failed_to_get_output_buffer;
-  else if (!buf)
+  } else if (!buf) {
     goto got_null_output_buffer;
+  }
 
   if (buffer_info.size > 0) {
     GstBuffer *outbuf;
@@ -670,9 +677,7 @@ flow_error:
           gst_event_new_eos ());
       gst_pad_pause_task (GST_AUDIO_DECODER_SRC_PAD (self));
     } else if (flow_ret < GST_FLOW_EOS) {
-      GST_ELEMENT_ERROR (self, STREAM, FAILED,
-          ("Internal data stream error."), ("stream stopped, reason %s",
-              gst_flow_get_name (flow_ret)));
+      GST_ELEMENT_FLOW_ERROR (self, flow_ret);
       gst_pad_push_event (GST_AUDIO_DECODER_SRC_PAD (self),
           gst_event_new_eos ());
       gst_pad_pause_task (GST_AUDIO_DECODER_SRC_PAD (self));
@@ -882,6 +887,21 @@ gst_amc_audio_dec_set_format (GstAudioDecoder * decoder, GstCaps * caps)
   if (!format) {
     GST_ELEMENT_ERROR_FROM_ERROR (self, err);
     return FALSE;
+  }
+
+  if (gst_structure_has_name (s, "audio/mpeg")) {
+    gint mpegversion;
+    const gchar *stream_format;
+
+    if (!gst_structure_get_int (s, "mpegversion", &mpegversion))
+      mpegversion = -1;
+    stream_format = gst_structure_get_string (s, "stream-format");
+
+    if (mpegversion == 4 && g_strcmp0 (stream_format, "adts") == 0) {
+      gst_amc_format_set_int (format, "is-adts", 1, &err);
+      if (err)
+        GST_ELEMENT_WARNING_FROM_ERROR (self, err);
+    }
   }
 
   /* FIXME: These buffers needs to be valid until the codec is stopped again */

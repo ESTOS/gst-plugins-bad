@@ -20,6 +20,7 @@
  */
 /**
  * SECTION:gstmpeg4parser
+ * @title: GstMpeg4Parser
  * @short_description: Convenience library for parsing mpeg4 part 2 video
  * bitstream.
  *
@@ -411,7 +412,7 @@ gst_mpeg4_next_resync (GstMpeg4Packet * packet,
 /**
  * gst_mpeg4_parse:
  * @packet: The #GstMpeg4Packet to fill
- * @skip_user_data: %TRUE to skip user data packet %FALSE otherwize
+ * @skip_user_data: %TRUE to skip user data packet %FALSE otherwise
  * @vop: The last parsed #GstMpeg4VideoObjectPlane or %NULL if you do
  * not need to detect the resync codes.
  * @offset: offset from which to start the parsing

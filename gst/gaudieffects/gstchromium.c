@@ -46,15 +46,15 @@
 
 /**
  * SECTION:element-chromium
+ * @title: chromium
  *
  * Chromium breaks the colors of a video stream in realtime.
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 -v videotestsrc ! chromium ! videoconvert ! autovideosink
  * ]| This pipeline shows the effect of chromium on a test stream
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -152,10 +152,10 @@ gst_chromium_class_init (GstChromiumClass * klass)
       "Chromium breaks the colors of the video signal.",
       "Luis de Bethencourt <luis@debethencourt.com>");
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_chromium_sink_template));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_chromium_src_template));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &gst_chromium_sink_template);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &gst_chromium_src_template);
 
   gobject_class->set_property = gst_chromium_set_property;
   gobject_class->get_property = gst_chromium_get_property;

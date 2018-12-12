@@ -173,10 +173,8 @@ gst_dtls_dec_class_init (GstDtlsDecClass * klass)
 
   g_object_class_install_properties (gobject_class, NUM_PROPERTIES, properties);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&src_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sink_template));
+  gst_element_class_add_static_pad_template (element_class, &src_template);
+  gst_element_class_add_static_pad_template (element_class, &sink_template);
 
   gst_element_class_set_static_metadata (element_class,
       "DTLS Decoder",
@@ -436,30 +434,9 @@ on_key_received (GstDtlsConnection * connection, gpointer key, guint cipher,
 }
 
 static gboolean
-signal_peer_certificate_received (GWeakRef * ref)
-{
-  GstDtlsDec *self;
-
-  self = g_weak_ref_get (ref);
-  g_weak_ref_clear (ref);
-  g_free (ref);
-  ref = NULL;
-
-  if (self) {
-    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_PEER_PEM]);
-    g_object_unref (self);
-    self = NULL;
-  }
-
-  return FALSE;
-}
-
-static gboolean
 on_peer_certificate_received (GstDtlsConnection * connection, gchar * pem,
     GstDtlsDec * self)
 {
-  GWeakRef *ref;
-
   g_return_val_if_fail (GST_IS_DTLS_DEC (self), TRUE);
 
   GST_DEBUG_OBJECT (self, "Received peer certificate PEM: \n%s", pem);
@@ -470,10 +447,7 @@ on_peer_certificate_received (GstDtlsConnection * connection, gchar * pem,
   }
   self->peer_pem = g_strdup (pem);
 
-  ref = g_new (GWeakRef, 1);
-  g_weak_ref_init (ref, self);
-
-  g_idle_add ((GSourceFunc) signal_peer_certificate_received, ref);
+  g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_PEER_PEM]);
 
   return TRUE;
 }

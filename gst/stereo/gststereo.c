@@ -23,15 +23,15 @@
  */
 /**
  * SECTION:element-stereo
+ * @title: stereo
  *
  * Create a wide stereo effect.
  *
- * <refsect2>
- * <title>Example pipelines</title>
+ * ## Example pipelines
  * |[
  * gst-launch-1.0 -v filesrc location=sine.ogg ! oggdemux ! vorbisdec ! audioconvert ! stereo ! audioconvert ! audioresample ! alsasink
  * ]| Play an Ogg/Vorbis file.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -102,7 +102,7 @@ gst_stereo_class_init (GstStereoClass * klass)
 
   g_object_class_install_property (gobject_class, PROP_STEREO,
       g_param_spec_float ("stereo", "stereo", "stereo",
-          0.0, 1.0, 0.1,
+          0.0, 1.0, 0.1f,
           G_PARAM_READWRITE | GST_PARAM_CONTROLLABLE | G_PARAM_STATIC_STRINGS));
 
   trans_class->transform_ip = GST_DEBUG_FUNCPTR (gst_stereo_transform_ip);
@@ -112,7 +112,7 @@ static void
 gst_stereo_init (GstStereo * stereo)
 {
   stereo->active = TRUE;
-  stereo->stereo = 0.1;
+  stereo->stereo = 0.1f;
 }
 
 static GstFlowReturn
@@ -210,5 +210,5 @@ plugin_init (GstPlugin * plugin)
 GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
     GST_VERSION_MINOR,
     stereo,
-    "Muck with the stereo signal, enhance it's 'stereo-ness'",
+    "Muck with the stereo signal, enhance its 'stereo-ness'",
     plugin_init, VERSION, GST_LICENSE, GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)

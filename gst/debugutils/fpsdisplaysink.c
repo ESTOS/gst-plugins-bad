@@ -19,18 +19,18 @@
 
 /**
  * SECTION:element-fpsdisplaysink
+ * @title: fpsdisplaysink
  *
  * Can display the current and average framerate as a testoverlay or on stdout.
  *
- * <refsect2>
- * <title>Example launch lines</title>
+ * ## Example launch lines
  * |[
  * gst-launch-1.0 videotestsrc ! fpsdisplaysink
  * gst-launch-1.0 videotestsrc ! fpsdisplaysink text-overlay=false
  * gst-launch-1.0 filesrc location=video.avi ! decodebin name=d ! queue ! fpsdisplaysink d. ! queue ! fakesink sync=true
  * gst-launch-1.0 playbin uri=file:///path/to/video.avi video-sink="fpsdisplaysink" audio-sink=fakesink
  * ]|
- * </refsect2>
+ *
  */
 /* FIXME:
  * - can we avoid plugging the textoverlay?
@@ -205,8 +205,8 @@ fps_display_sink_class_init (GstFPSDisplaySinkClass * klass)
 
   gstelement_klass->change_state = fps_display_sink_change_state;
 
-  gst_element_class_add_pad_template (gstelement_klass,
-      gst_static_pad_template_get (&fps_display_sink_template));
+  gst_element_class_add_static_pad_template (gstelement_klass,
+      &fps_display_sink_template);
 
   gst_element_class_set_static_metadata (gstelement_klass,
       "Measure and show framerate on videosink", "Sink/Video",

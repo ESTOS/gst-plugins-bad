@@ -21,6 +21,7 @@
  */
 /**
  * SECTION:element-autoconvert
+ * @title: autoconvert
  *
  * The #autoconvert element has one sink and one source pad. It will look for
  * other elements that also have one sink and one source pad.
@@ -159,10 +160,8 @@ gst_auto_convert_class_init (GstAutoConvertClass * klass)
   parent_quark = g_quark_from_static_string ("parent");
 
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&srctemplate));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&sinktemplate));
+  gst_element_class_add_static_pad_template (gstelement_class, &srctemplate);
+  gst_element_class_add_static_pad_template (gstelement_class, &sinktemplate);
 
   gst_element_class_set_static_metadata (gstelement_class,
       "Select convertor based on caps", "Generic/Bin",
@@ -924,6 +923,7 @@ gst_auto_convert_sink_chain (GstPad * pad, GstObject * parent,
   } else {
     GST_ERROR_OBJECT (autoconvert, "Got buffer without an negotiated element,"
         " returning not-negotiated");
+    gst_buffer_unref (buffer);
   }
 
   return ret;
@@ -945,6 +945,7 @@ gst_auto_convert_sink_chain_list (GstPad * pad, GstObject * parent,
   } else {
     GST_ERROR_OBJECT (autoconvert, "Got buffer without an negotiated element,"
         " returning not-negotiated");
+    gst_buffer_list_unref (list);
   }
 
   return ret;
@@ -1188,7 +1189,8 @@ gst_auto_convert_src_event (GstPad * pad, GstObject * parent, GstEvent * event)
     GST_WARNING_OBJECT (autoconvert,
         "Got upstream event while no element was selected," "forwarding.");
     ret = gst_pad_push_event (autoconvert->sinkpad, event);
-  }
+  } else
+    gst_event_unref (event);
 
   return ret;
 }

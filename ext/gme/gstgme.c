@@ -92,10 +92,8 @@ gst_gme_dec_class_init (GstGmeDecClass * klass)
       "Chris Lee <clee@kde.org>, Brian Koropoff <bkoropoff@gmail.com>, "
       "Michael Pyne <mpyne@kde.org>, Sebastian Dröge <sebastian.droege@collabora.co.uk>");
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sink_factory));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&src_factory));
+  gst_element_class_add_static_pad_template (element_class, &sink_factory);
+  gst_element_class_add_static_pad_template (element_class, &src_factory);
 
   element_class->change_state = GST_DEBUG_FUNCPTR (gst_gme_dec_change_state);
 }
@@ -164,7 +162,11 @@ gst_gme_dec_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
         forward = TRUE;
       }
       break;
+    case GST_EVENT_CAPS:
+    case GST_EVENT_SEGMENT:
+      break;
     default:
+      forward = TRUE;
       break;
   }
   if (forward)
@@ -215,9 +217,7 @@ gst_gme_dec_src_event (GstPad * pad, GstObject * parent, GstEvent * event)
         guint64 dest = (guint64) start;
 
         if (gme->total_duration != GST_CLOCK_TIME_NONE)
-          dest = CLAMP (dest, 0, gme->total_duration);
-        else
-          dest = MAX (0, dest);
+          dest = MIN (dest, gme->total_duration);
 
         if (dest == cur)
           break;
@@ -355,9 +355,7 @@ gst_gme_play (GstPad * pad)
     if (flow_return == GST_FLOW_EOS) {
       gst_pad_push_event (pad, gst_event_new_eos ());
     } else if (flow_return < GST_FLOW_EOS || flow_return == GST_FLOW_NOT_LINKED) {
-      GST_ELEMENT_ERROR (gme, STREAM, FAILED, ("Internal data stream error."),
-          ("stream stopped, reason %s", gst_flow_get_name (flow_return)));
-
+      GST_ELEMENT_FLOW_ERROR (gme, flow_return);
       gst_pad_push_event (pad, gst_event_new_eos ());
     }
   }
@@ -493,6 +491,10 @@ gst_gme_dec_change_state (GstElement * element, GstStateChange transition)
   switch (transition) {
     case GST_STATE_CHANGE_PAUSED_TO_READY:
       gst_adapter_clear (dec->adapter);
+      if (dec->player) {
+        gme_delete (dec->player);
+        dec->player = NULL;
+      }
       break;
     default:
       break;
@@ -510,6 +512,6 @@ plugin_init (GstPlugin * plugin)
 
 GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
     GST_VERSION_MINOR,
-    gmedec,
+    gme,
     "GME Audio Decoder",
     plugin_init, VERSION, "LGPL", GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN);

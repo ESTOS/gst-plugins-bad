@@ -20,15 +20,15 @@
 
 /**
  * SECTION:element-assrender
+ * @title: assrender
  *
  * Renders timestamped SSA/ASS subtitles on top of a video stream.
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
- * gst-launch-1.0 -v filesrc location=/path/to/mkv ! matroskademux name=d ! queue ! mpegaudioparse ! mad ! audioconvert ! autoaudiosink  d. ! queue ! h264parse ! avdec_h264 ! videoconvert ! r.   d. ! queue ! "application/x-ass" ! assrender name=r ! videoconvert ! autovideosink
+ * gst-launch-1.0 -v filesrc location=/path/to/mkv ! matroskademux name=d ! queue ! mpegaudioparse ! mpg123audiodec ! audioconvert ! autoaudiosink  d. ! queue ! h264parse ! avdec_h264 ! videoconvert ! r.   d. ! queue ! "application/x-ass" ! assrender name=r ! videoconvert ! autovideosink
  * ]| This pipeline demuxes a Matroska file with h.264 video, MP3 audio and embedded ASS subtitles and renders the subtitles on top of the video.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -170,12 +170,11 @@ gst_ass_render_class_init (GstAssRenderClass * klass)
   gstelement_class->change_state =
       GST_DEBUG_FUNCPTR (gst_ass_render_change_state);
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&src_factory));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&video_sink_factory));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&text_sink_factory));
+  gst_element_class_add_static_pad_template (gstelement_class, &src_factory);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &video_sink_factory);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &text_sink_factory);
 
   gst_element_class_set_static_metadata (gstelement_class, "ASS/SSA Render",
       "Mixer/Video/Overlay/Subtitle",
@@ -931,12 +930,16 @@ gst_ass_render_negotiate (GstAssRender * render, GstCaps * caps)
   gst_caps_unref (overlay_caps);
   gst_caps_unref (caps);
 
+  if (!ret)
+    gst_pad_mark_reconfigure (render->srcpad);
+
   return ret;
 
 no_format:
   {
     if (caps)
       gst_caps_unref (caps);
+    gst_pad_mark_reconfigure (render->srcpad);
     return FALSE;
   }
 }
@@ -1161,8 +1164,15 @@ gst_ass_render_chain_video (GstPad * pad, GstObject * parent,
   guint64 start, stop, clip_start = 0, clip_stop = 0;
   ASS_Image *ass_image;
 
-  if (gst_pad_check_reconfigure (render->srcpad))
-    gst_ass_render_negotiate (render, NULL);
+  if (gst_pad_check_reconfigure (render->srcpad)) {
+    if (!gst_ass_render_negotiate (render, NULL)) {
+      gst_pad_mark_reconfigure (render->srcpad);
+      if (GST_PAD_IS_FLUSHING (render->srcpad))
+        goto flushing;
+      else
+        goto not_negotiated;
+    }
+  }
 
   if (!GST_BUFFER_TIMESTAMP_IS_VALID (buffer))
     goto missing_timestamp;
@@ -1379,6 +1389,13 @@ missing_timestamp:
     GST_WARNING_OBJECT (render, "buffer without timestamp, discarding");
     gst_buffer_unref (buffer);
     return GST_FLOW_OK;
+  }
+not_negotiated:
+  {
+    GST_ASS_RENDER_UNLOCK (render);
+    GST_DEBUG_OBJECT (render, "not negotiated");
+    gst_buffer_unref (buffer);
+    return GST_FLOW_NOT_NEGOTIATED;
   }
 flushing:
   {

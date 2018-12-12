@@ -22,35 +22,32 @@
 
 /**
  * SECTION:element-ladspa
+ * @title: ladspa
  * @short_description: bridge for LADSPA (Linux Audio Developer's Simple Plugin API)
  * @see_also: #GstAudioConvert #GstAudioResample, #GstAudioTestSrc, #GstAutoAudioSink
- * 
+ *
  * The LADSPA (Linux Audio Developer's Simple Plugin API) element is a bridge
  * for plugins using the <ulink url="http://www.ladspa.org/">LADSPA</ulink> API.
  * It scans all installed LADSPA plugins and registers them as gstreamer
  * elements. If available it can also parse LRDF files and use the metadata for
  * element classification. The functionality you get depends on the LADSPA plugins
  * you have installed.
- * 
- * <refsect2>
- * <title>Example LADSPA line without this plugins</title>
+ *
+ * ## Example LADSPA line without this plugins
  * |[
  * (padsp) listplugins
  * (padsp) analyseplugin cmt.so amp_mono
  * gst-launch-1.0 -e filesrc location="$myfile" ! decodebin ! audioconvert ! audioresample ! "audio/x-raw,format=S16LE,rate=48000,channels=1" ! wavenc ! filesink location="testin.wav"
- * (padsp) applyplugin testin.wav testout.wav cmt.so amp_mono 2 
+ * (padsp) applyplugin testin.wav testout.wav cmt.so amp_mono 2
  * gst-launch-1.0 playbin uri=file://"$PWD"/testout.wav
  * ]| Decode any audio file into wav with the format expected for the specific ladspa plugin to be applied, apply the ladspa filter and play it.
- * </refsect2>
  *
  * Now with this plugin:
  *
- * <refsect2>
- * <title>Example LADSPA line with this plugins</title>
+ * ## Example LADSPA line with this plugins
  * |[
  * gst-launch-1.0 autoaudiosrc ! ladspa-cmt-so-amp-mono gain=2 ! ladspa-caps-so-plate ! ladspa-tap-echo-so-tap-stereo-echo l-delay=500 r-haas-delay=500 ! tee name=myT myT. ! queue ! autoaudiosink myT. ! queue ! audioconvert ! goom ! videoconvert ! xvimagesink pixel-aspect-ratio=3/4
  * ]| Get audio input, filter it through CAPS Plate and TAP Stereo Echo, play it and show a visualization (recommended hearphones).
- * </refsect2>
  *
  * In case you wonder the plugin naming scheme, quoting ladspa.h:
  *   "Plugin types should be identified by file and label rather than by
@@ -61,60 +58,52 @@
  * on top of the audio in and out one, so some parameters are readable too.
  *
  * You can see the listing of plugins available with:
- * <refsect2>
- * <title>Inspecting the plugins list</title>
+ *
+ * ## Inspecting the plugins list
  * |[
  * gst-inspect ladspa
  * ]| List available LADSPA plugins on gstreamer.
- * </refsect2>
  *
  * You can see the parameters of any plugin with:
- * <refsect2>
- * <title>Inspecting the plugins</title>
+ *
+ * ## Inspecting the plugins
  * |[
  * gst-inspect ladspa-retro-flange-1208-so-retroflange
  * ]| List details of the plugin, parameters, range and defaults included.
- * </refsect2>
  *
- * The elements categorize in: 
- * <itemizedlist>
- * <listitem><para>Filter/Effect/Audio/LADSPA:</para>
- * <refsect2>
- * <title>Example Filter/Effect/Audio/LADSPA line with this plugins</title>
+ * The elements categorize in:
+ *
+ * * Filter/Effect/Audio/LADSPA:
+ *
+ * ## Example Filter/Effect/Audio/LADSPA line with this plugins
  * |[
  * gst-launch-1.0 filesrc location="$myfile" ! decodebin ! audioconvert ! audioresample ! ladspa-calf-so-reverb decay-time=15 high-frq-damp=20000 room-size=5 diffusion=1 wet-amount=2 dry-amount=2 pre-delay=50 bass-cut=20000 treble-cut=20000 ! ladspa-tap-echo-so-tap-stereo-echo l-delay=500 r-haas-delay=500 ! autoaudiosink
  * ]| Decode any audio file, filter it through Calf Reverb LADSPA then TAP Stereo Echo, and play it.
- * </refsect2>
- * </listitem>
- * <listitem><para>Source/Audio/LADSPA:</para> 
- * <refsect2>
- * <title>Example Source/Audio/LADSPA line with this plugins</title>
+ *
+ * * Source/Audio/LADSPA:
+ *
+ * ## Example Source/Audio/LADSPA line with this plugins
  * |[
  * gst-launch-1.0 ladspasrc-sine-so-sine-fcac frequency=220 amplitude=100 ! audioconvert ! autoaudiosink
  * ]| Generate a sine wave with Sine Oscillator (Freq:control, Amp:control) and play it.
- * </refsect2>
- * <refsect2>
- * <title>Example Source/Audio/LADSPA line with this plugins</title>
+ *
+ * ## Example Source/Audio/LADSPA line with this plugins
  * |[
  * gst-launch-1.0 ladspasrc-caps-so-click bpm=240 volume=1 ! autoaudiosink
  * ]| Generate clicks with CAPS Click - Metronome at 240 beats per minute and play it.
- * </refsect2>
- * <refsect2>
- * <title>Example Source/Audio/LADSPA line with this plugins</title>
+ *
+ * ## Example Source/Audio/LADSPA line with this plugins
  * |[
  * gst-launch-1.0 ladspasrc-random-1661-so-random-fcsc-oa ! ladspa-cmt-so-amp-mono gain=1.5 ! ladspa-caps-so-plate ! tee name=myT myT. ! queue ! autoaudiosink myT. ! queue ! audioconvert ! wavescope ! videoconvert ! autovideosink
  * ]| Generate random wave, filter it trhough Mono Amplifier and Versatile Plate Reverb, and play, while showing, it.
- * </refsect2>
- * </listitem>
- * <listitem><para>Sink/Audio/LADSPA:</para>
- * <refsect2>
- * <title>Example Sink/Audio/LADSPA line with this plugins</title>
+ *
+ * * Sink/Audio/LADSPA:
+ *
+ * ## Example Sink/Audio/LADSPA line with this plugins
  * |[
  * gst-launch-1.0 autoaudiosrc ! ladspa-cmt-so-amp-mono gain=2 ! ladspa-caps-so-plate ! ladspa-tap-echo-so-tap-stereo-echo l-delay=500 r-haas-delay=500 ! tee name=myT myT. ! audioconvert ! audioresample ! queue ! ladspasink-cmt-so-null-ai myT. ! audioconvert ! audioresample ! queue ! goom ! videoconvert ! xvimagesink pixel-aspect-ratio=3/4
  * ]| Get audio input, filter it trhough Mono Amplifier, CAPS Plate LADSPA and TAP Stereo Echo, explicitily anulate audio with Null (Audio Output), and play a visualization (recommended hearphones).
- * </refsect2>
- * </listitem>
- * </itemizedlist>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -144,10 +133,24 @@ GST_DEBUG_CATEGORY (ladspa_debug);
 #define LADSPA_VERSION "1.0"
 #endif
 
+#if defined (G_OS_WIN32)
+#define GST_LADSPA_ENVVARS "APPDATA/LADSPA:COMMONPROGRAMFILES/LADSPA"
+#define GST_LADSPA_DEFAULT_PATH ""
+#elif defined (HAVE_OSX)
+#define GST_LADSPA_ENVVARS "HOME/Library/Audio/Plug-Ins/LADSPA:HOME/.ladspa"
 #define GST_LADSPA_DEFAULT_PATH \
-  "/usr/lib/ladspa" G_SEARCHPATH_SEPARATOR_S \
-  "/usr/local/lib/ladspa" G_SEARCHPATH_SEPARATOR_S \
-  LIBDIR "/ladspa"
+  "/usr/local/lib/ladspa:/usr/lib/ladspa:/Library/Audio/Plug-Ins/LADSPA"
+#elif defined (G_OS_UNIX)
+#define GST_LADSPA_ENVVARS "HOME/.ladspa"
+#define GST_LADSPA_DEFAULT_PATH \
+  "/usr/lib/ladspa:" \
+  "/usr/lib64/ladspa:" \
+  "/usr/local/lib/ladspa:" \
+  "/usr/local/lib64/ladspa:" \
+   LIBDIR "/ladspa"
+#else
+#error "Unsupported OS"
+#endif
 
 GstStructure *ladspa_meta_all = NULL;
 
@@ -236,8 +239,7 @@ ladspa_describe_plugin (const gchar * file_name, const gchar * entry_name,
       continue;
     }
 
-    ladspa_meta = gst_structure_new_empty ("ladspa");
-    gst_structure_set (ladspa_meta,
+    ladspa_meta = gst_structure_new ("ladspa",
         "plugin-filename", G_TYPE_STRING, file_name,
         "element-ix", G_TYPE_UINT, i,
         "element-type-name", G_TYPE_STRING, type_name,
@@ -300,7 +302,19 @@ ladspa_plugin_directory_search (GstPlugin * ladspa_plugin, const char *dir_name)
     return FALSE;
 
   while ((entry_name = g_dir_read_name (dir))) {
+    /* Only attempt to open files with the module suffixes */
+    if (!g_str_has_suffix (entry_name, "." G_MODULE_SUFFIX)
+#ifdef GST_EXTRA_MODULE_SUFFIX
+        && !g_str_has_suffix (entry_name, GST_EXTRA_MODULE_SUFFIX)
+#endif
+        ) {
+      GST_TRACE ("Ignoring file %s as it has the wrong suffix for a plugin",
+          entry_name);
+      continue;
+    }
+
     file_name = g_build_filename (dir_name, entry_name, NULL);
+    GST_LOG ("Probing file %s as a LADSPA plugin", file_name);
     plugin =
         g_module_open (file_name, G_MODULE_BIND_LAZY | G_MODULE_BIND_LOCAL);
     if (plugin) {
@@ -308,7 +322,7 @@ ladspa_plugin_directory_search (GstPlugin * ladspa_plugin, const char *dir_name)
       if (g_module_symbol (plugin, "ladspa_descriptor",
               (gpointer *) & descriptor_function)) {
         /* we've found a ladspa_descriptor function, now introspect it. */
-        GST_INFO ("describe %s", file_name);
+        GST_INFO ("Found LADSPA descriptor in %s", file_name);
         ladspa_describe_plugin (file_name, entry_name, descriptor_function);
         ok = TRUE;
       } else {
@@ -327,8 +341,8 @@ ladspa_plugin_directory_search (GstPlugin * ladspa_plugin, const char *dir_name)
 static gboolean
 ladspa_plugin_path_search (GstPlugin * plugin)
 {
-  const gchar *search_path;
-  gchar *ladspa_path;
+  const gchar *search_path, *path;
+  GString *ladspa_path;
   gchar **paths;
   gint i, j, path_entries;
   gboolean res = FALSE, skip;
@@ -336,18 +350,57 @@ ladspa_plugin_path_search (GstPlugin * plugin)
   gchar *pos, *prefix, *rdf_path;
 #endif
 
+  ladspa_path = g_string_new (NULL);
+
   search_path = g_getenv ("LADSPA_PATH");
   if (search_path) {
-    ladspa_path =
-        g_strdup_printf ("%s" G_SEARCHPATH_SEPARATOR_S GST_LADSPA_DEFAULT_PATH,
-        search_path);
+    g_string_append_printf (ladspa_path,
+        "%s" G_SEARCHPATH_SEPARATOR_S GST_LADSPA_DEFAULT_PATH, search_path);
   } else {
-    ladspa_path = g_strdup (GST_LADSPA_DEFAULT_PATH);
+    g_string_append_printf (ladspa_path, GST_LADSPA_DEFAULT_PATH);
   }
 
-  paths = g_strsplit (ladspa_path, G_SEARCHPATH_SEPARATOR_S, 0);
+#ifdef G_OS_WIN32
+  path = g_getenv ("APPDATA");
+  if (path) {
+    gchar *path_subdir = g_build_filename (path, "LADSPA", NULL);
+    if (ladspa_path->len)
+      g_string_append_printf (ladspa_path, G_SEARCHPATH_SEPARATOR_S "%s",
+          path_subdir);
+    else
+      g_string_append (ladspa_path, path_subdir);
+    g_free (path_subdir);
+  }
+
+  path = g_getenv ("COMMONPROGRAMFILES");
+  if (path) {
+    gchar *path_subdir = g_build_filename (path, "LADSPA", NULL);
+    if (ladspa_path->len)
+      g_string_append_printf (ladspa_path, G_SEARCHPATH_SEPARATOR_S "%s",
+          path_subdir);
+    else
+      g_string_append (ladspa_path, path_subdir);
+    g_free (path_subdir);
+  }
+#else
+  path = g_getenv ("HOME");
+
+  if (path) {
+    if (ladspa_path->len)
+      g_string_append_printf (ladspa_path, ":%s/.ladspa", path);
+    else
+      g_string_append_printf (ladspa_path, "%s/.ladspa", path);
+
+#if defined (HAVE_IOS) || defined (HAVE_OSX)
+    g_string_append_printf (ladspa_path, ":%s/Library/Audio/Plug-Ins/LADSPA",
+        path);
+#endif
+  }
+#endif
+
+  paths = g_strsplit (ladspa_path->str, G_SEARCHPATH_SEPARATOR_S, 0);
   path_entries = g_strv_length (paths);
-  GST_INFO ("%d dirs in search paths \"%s\"", path_entries, ladspa_path);
+  GST_INFO ("%d dirs in search paths \"%s\"", path_entries, ladspa_path->str);
 
 #ifdef HAVE_LRDF
   for (i = 0; i < path_entries; i++) {
@@ -360,7 +413,7 @@ ladspa_plugin_path_search (GstPlugin * plugin)
     }
     if (skip)
       break;
-    /* 
+    /*
      * transform path: /usr/lib/ladspa -> /usr/share/ladspa/rdf/
      * yes, this is ugly, but lrdf has not searchpath
      */
@@ -388,7 +441,7 @@ ladspa_plugin_path_search (GstPlugin * plugin)
   }
   g_strfreev (paths);
 
-  g_free (ladspa_path);
+  g_string_free (ladspa_path, TRUE);
 
   return res;
 }
@@ -402,14 +455,14 @@ plugin_init (GstPlugin * plugin)
   GST_DEBUG_CATEGORY_INIT (ladspa_debug, "ladspa", 0, "LADSPA plugins");
 
 #ifdef ENABLE_NLS
-  GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
-      LOCALEDIR);
+  GST_DEBUG_OBJECT (plugin, "binding text domain %s to locale dir %s",
+      GETTEXT_PACKAGE, LOCALEDIR);
   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
 #endif
 
   gst_plugin_add_dependency_simple (plugin,
-      "LADSPA_PATH",
+      "LADSPA_PATH:" GST_LADSPA_ENVVARS,
       GST_LADSPA_DEFAULT_PATH, NULL, GST_PLUGIN_DEPENDENCY_FLAG_NONE);
 
 #ifdef HAVE_LRDF
@@ -420,13 +473,12 @@ plugin_init (GstPlugin * plugin)
   if (ladspa_meta_all) {
     n = gst_structure_n_fields (ladspa_meta_all);
   }
-  GST_INFO ("%d entries in cache", n);
+  GST_INFO_OBJECT (plugin, "%d entries in cache", n);
   if (!n) {
     ladspa_meta_all = gst_structure_new_empty ("ladspa");
-    res = ladspa_plugin_path_search (plugin);
-    if (res) {
+    if ((res = ladspa_plugin_path_search (plugin))) {
       n = gst_structure_n_fields (ladspa_meta_all);
-      GST_INFO ("%d entries after scanning", n);
+      GST_INFO_OBJECT (plugin, "%d entries after scanning", n);
       gst_plugin_set_cache_data (plugin, ladspa_meta_all);
     }
   } else {
@@ -438,7 +490,7 @@ plugin_init (GstPlugin * plugin)
     const gchar *name;
     const GValue *value;
 
-    GST_INFO ("register types");
+    GST_INFO_OBJECT (plugin, "register types");
 
     for (i = 0; i < n; i++) {
       name = gst_structure_nth_field_name (ladspa_meta_all, i);
@@ -452,7 +504,7 @@ plugin_init (GstPlugin * plugin)
   }
 
   if (!res) {
-    GST_WARNING ("no LADSPA plugins found, check LADSPA_PATH");
+    GST_WARNING_OBJECT (plugin, "no LADSPA plugins found, check LADSPA_PATH");
   }
 
   /* we don't want to fail, even if there are no elements registered */

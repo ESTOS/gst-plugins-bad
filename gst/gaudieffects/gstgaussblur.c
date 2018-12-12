@@ -47,15 +47,15 @@
 
 /**
  * SECTION:element-gaussianblur
+ * @title: gaussianblur
  *
  * Gaussianblur blurs the video stream in realtime.
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 -v videotestsrc ! gaussianblur ! videoconvert ! autovideosink
  * ]| This pipeline shows the effect of gaussianblur on a test stream
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -137,10 +137,10 @@ gst_gaussianblur_class_init (GstGaussianBlurClass * klass)
       "Perform Gaussian blur/sharpen on a video",
       "Jan Schmidt <thaytan@noraisin.net>");
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_gaussianblur_sink_template));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_gaussianblur_src_template));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &gst_gaussianblur_sink_template);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &gst_gaussianblur_src_template);
 
   gobject_class->set_property = gst_gaussianblur_set_property;
   gobject_class->get_property = gst_gaussianblur_get_property;
@@ -178,7 +178,7 @@ gst_gaussianblur_set_info (GstVideoFilter * filter, GstCaps * incaps,
 static void
 gst_gaussianblur_init (GstGaussianBlur * gb)
 {
-  gb->sigma = DEFAULT_SIGMA;
+  gb->sigma = (gfloat) DEFAULT_SIGMA;
   gb->cur_sigma = -1.0;
 }
 

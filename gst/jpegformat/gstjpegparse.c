@@ -23,6 +23,7 @@
 
 /**
  * SECTION:element-jpegparse
+ * @title: jpegparse
  * @short_description: JPEG parser
  *
  * Parses a JPEG stream into JPEG images.  It looks for EOI boundaries to
@@ -30,14 +31,13 @@
  * image header searching for image properties such as width and height
  * among others. Jpegparse can also extract metadata (e.g. xmp).
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 -v souphttpsrc location=... ! jpegparse ! matroskamux ! filesink location=...
  * ]|
  * The above pipeline fetches a motion JPEG stream from an IP camera over
  * HTTP and stores it in a matroska file.
- * </refsect2>
+ *
  */
 /* FIXME: output plain JFIF APP marker only. This provides best code reuse.
  * JPEG decoders would not need to handle this part anymore. Also when remuxing
@@ -144,10 +144,10 @@ gst_jpeg_parse_class_init (GstJpegParseClass * klass)
   gstbaseparse_class->handle_frame = gst_jpeg_parse_handle_frame;
   gstbaseparse_class->pre_push_frame = gst_jpeg_parse_pre_push_frame;
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_jpeg_parse_src_pad_template));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_jpeg_parse_sink_pad_template));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &gst_jpeg_parse_src_pad_template);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &gst_jpeg_parse_sink_pad_template);
 
   gst_element_class_set_static_metadata (gstelement_class,
       "JPEG stream parser",
@@ -572,6 +572,9 @@ gst_jpeg_parse_app1 (GstJpegParse * parse, GstByteReader * reader)
         APP1, id_str, size);
 
   } else {
+    /* restore the byte position and size */
+    reader->size += 2;
+    reader->byte -= 2;
     if (!gst_jpeg_parse_skip_marker (parse, reader, APP1))
       return FALSE;
   }
@@ -871,6 +874,7 @@ gst_jpeg_parse_sink_event (GstBaseParse * bparse, GstEvent * event)
       parse->priv->last_offset = 0;
       parse->priv->last_entropy_len = 0;
       parse->priv->last_resync = FALSE;
+      res = GST_BASE_PARSE_CLASS (parent_class)->sink_event (bparse, event);
       break;
     case GST_EVENT_TAG:{
       if (gst_pad_has_current_caps (GST_BASE_PARSE_SRC_PAD (parse)))

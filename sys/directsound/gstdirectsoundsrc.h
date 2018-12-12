@@ -2,7 +2,7 @@
  * GStreamer
  * Copyright 2005 Thomas Vander Stichele <thomas@apestaart.org>
  * Copyright 2005 Ronald S. Bultje <rbultje@ronald.bitfreak.net>
- * Copyright 2005 Sébastien Moutte <sebastien@moutte.net>
+ * Copyright 2005 SÃ©bastien Moutte <sebastien@moutte.net>
  * Copyright 2006 Joni Valtanen <joni.valtanen@movial.fi>
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a
@@ -77,19 +77,13 @@ struct _GstDirectSoundSrc
 
   GstAudioSrc src;
 
-  HINSTANCE DSoundDLL; /* DLL instance */
   LPDIRECTSOUNDCAPTURE pDSC; /* DirectSoundCapture*/
   LPDIRECTSOUNDCAPTUREBUFFER pDSBSecondary;  /*Secondaty capturebuffer*/
   DWORD current_circular_offset;
 
-  HANDLE rghEvent;
-  DWORD notifysize;
-
   guint buffer_size;
-  guint latency_size;
   guint bytes_per_sample;
 
-  guint buffer_time;
   guint latency_time;
 
   HMIXER mixer;
@@ -109,6 +103,9 @@ struct _GstDirectSoundSrc
 
   GMutex dsound_lock;
 
+  GstClock *system_clock;
+  GstClockID *read_wait_clock_id;
+  gboolean reset_while_sleeping;
 };
 
 struct _GstDirectSoundSrcClass 
@@ -117,6 +114,11 @@ struct _GstDirectSoundSrcClass
 };
 
 GType gst_directsound_src_get_type (void);
+
+#define GST_DIRECTSOUND_SRC_CAPS "audio/x-raw, " \
+        "format = (string) { S16LE, S8 }, " \
+        "layout = (string) interleaved, " \
+        "rate = (int) [ 1, MAX ], " "channels = (int) [ 1, 2 ]"
 
 G_END_DECLS
 

@@ -51,6 +51,9 @@
 
 #include <errno.h>
 #include "MotionCells.h"
+#if (CV_MAJOR_VERSION >= 3)
+#include <opencv2/imgproc.hpp>
+#endif
 #include <opencv2/imgproc/imgproc_c.h>
 
 MotionCells::MotionCells ()
@@ -79,6 +82,16 @@ MotionCells::MotionCells ()
   m_cellwidth = 0;
   m_cellheight = 0;
   m_sensitivity = 0;
+  m_changed_datafile = false;
+
+  memset (&m_header, 0, sizeof (MotionCellHeader));
+  m_header.headersize = GINT32_TO_BE (MC_HEADER);
+  m_header.type = GINT32_TO_BE (MC_TYPE);
+  m_header.version = GINT32_TO_BE (MC_VERSION);
+  m_header.itemsize = 0;
+  m_header.gridx = 0;
+  m_header.gridy = 0;
+  m_header.starttime = 0;
 }
 
 MotionCells::~MotionCells ()
@@ -116,6 +129,8 @@ MotionCells::performDetectionMotionCells (IplImage * p_frame,
 
   int sumframecnt = 0;
   int ret = 0;
+  CvSize frameSize;
+
   p_framerate >= 1 ? p_framerate <= 5 ? sumframecnt = 1
       : p_framerate <= 10 ? sumframecnt = 2
       : p_framerate <= 15 ? sumframecnt = 3
@@ -135,21 +150,21 @@ MotionCells::performDetectionMotionCells (IplImage * p_frame,
         return ret;
     }
 
-    m_frameSize = cvGetSize (p_frame);
-    m_frameSize.width /= 2;
-    m_frameSize.height /= 2;
-    setMotionCells (m_frameSize.width, m_frameSize.height);
+    frameSize = cvGetSize (p_frame);
+    frameSize.width /= 2;
+    frameSize.height /= 2;
+    setMotionCells (frameSize.width, frameSize.height);
     m_sensitivity = 1 - p_sensitivity;
     m_isVisible = p_isVisible;
     m_pcurFrame = cvCloneImage (p_frame);
-    IplImage *m_pcurgreyImage = cvCreateImage (m_frameSize, IPL_DEPTH_8U, 1);
-    IplImage *m_pprevgreyImage = cvCreateImage (m_frameSize, IPL_DEPTH_8U, 1);
-    IplImage *m_pgreyImage = cvCreateImage (m_frameSize, IPL_DEPTH_8U, 1);
+    IplImage *m_pcurgreyImage = cvCreateImage (frameSize, IPL_DEPTH_8U, 1);
+    IplImage *m_pprevgreyImage = cvCreateImage (frameSize, IPL_DEPTH_8U, 1);
+    IplImage *m_pgreyImage = cvCreateImage (frameSize, IPL_DEPTH_8U, 1);
     IplImage *m_pcurDown =
-        cvCreateImage (m_frameSize, m_pcurFrame->depth, m_pcurFrame->nChannels);
-    IplImage *m_pprevDown = cvCreateImage (m_frameSize, m_pprevFrame->depth,
+        cvCreateImage (frameSize, m_pcurFrame->depth, m_pcurFrame->nChannels);
+    IplImage *m_pprevDown = cvCreateImage (frameSize, m_pprevFrame->depth,
         m_pprevFrame->nChannels);
-    m_pbwImage = cvCreateImage (m_frameSize, IPL_DEPTH_8U, 1);
+    m_pbwImage = cvCreateImage (frameSize, IPL_DEPTH_8U, 1);
     cvPyrDown (m_pprevFrame, m_pprevDown);
     cvCvtColor (m_pprevDown, m_pprevgreyImage, CV_RGB2GRAY);
     cvPyrDown (m_pcurFrame, m_pcurDown);
@@ -187,11 +202,10 @@ MotionCells::performDetectionMotionCells (IplImage * p_frame,
       cvSetZero (transparencyimg);
       if (m_motioncellsidxcstr)
         delete[]m_motioncellsidxcstr;
-      m_motioncells_idx_count = m_MotionCells.size () * MSGLEN; //one motion cell idx: (lin idx : col idx,) it's 4 character except last motion cell idx
+      m_motioncells_idx_count = m_MotionCells.size () * MSGLEN; //one motion cell idx: (lin idx : col idx,) it's up to 6 character except last motion cell idx
       m_motioncellsidxcstr = new char[m_motioncells_idx_count];
-      char *tmpstr = new char[MSGLEN];
-      for (int i = 0; i < MSGLEN; i++)
-        tmpstr[i] = ' ';
+      char *tmpstr = new char[MSGLEN+ 1];
+      tmpstr[0] = 0;
       for (unsigned int i = 0; i < m_MotionCells.size (); i++) {
         CvPoint pt1, pt2;
         pt1.x = m_MotionCells.at (i).cell_pt1.x * 2;
@@ -215,10 +229,10 @@ MotionCells::performDetectionMotionCells (IplImage * p_frame,
         }
 
         if (i < m_MotionCells.size () - 1) {
-          snprintf (tmpstr, MSGLEN, "%d:%d,", m_MotionCells.at (i).lineidx,
+          snprintf (tmpstr, MSGLEN+1, "%d:%d,", m_MotionCells.at (i).lineidx,
               m_MotionCells.at (i).colidx);
         } else {
-          snprintf (tmpstr, MSGLEN, "%d:%d", m_MotionCells.at (i).lineidx,
+          snprintf (tmpstr, MSGLEN+1, "%d:%d", m_MotionCells.at (i).lineidx,
               m_MotionCells.at (i).colidx);
         }
         if (i == 0)
@@ -333,10 +347,7 @@ MotionCells::initDataFile (char *p_datafile, gint64 starttime)  //p_date is incr
     }
   } else
     mc_savefile = NULL;
-  memset (&m_header, 0, sizeof (MotionCellHeader));
-  m_header.headersize = GINT32_TO_BE (MC_HEADER);
-  m_header.type = GINT32_TO_BE (MC_TYPE);
-  m_header.version = GINT32_TO_BE (MC_VERSION);
+
   //it needs these bytes
   m_header.itemsize =
       GINT32_TO_BE ((int) ceil (ceil (m_gridx * m_gridy / 8.0) / 4.0) * 4 +

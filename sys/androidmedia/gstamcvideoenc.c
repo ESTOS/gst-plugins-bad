@@ -210,6 +210,8 @@ create_amc_format (GstAmcVideoEnc * encoder, GstVideoCodecState * input_state,
     }
   } else if (strcmp (name, "video/x-vp8") == 0) {
     mime = "video/x-vnd.on2.vp8";
+  } else if (strcmp (name, "video/x-vp9") == 0) {
+    mime = "video/x-vnd.on2.vp9";
   } else {
     GST_ERROR_OBJECT (encoder, "Failed to convert caps(%s/...) to any mime",
         name);
@@ -347,8 +349,7 @@ caps_from_amc_format (GstAmcFormat * amc_format)
 
     caps =
         gst_caps_new_simple ("video/mpeg", "mpegversion", G_TYPE_INT, 4,
-        "systemstream", G_TYPE_BOOLEAN, FALSE,
-        "parsed", G_TYPE_BOOLEAN, TRUE, NULL);
+        "systemstream", G_TYPE_BOOLEAN, FALSE, NULL);
 
     if (gst_amc_format_get_int (amc_format, "profile", &amc_profile, NULL)) {
       profile_string = gst_amc_mpeg4_profile_to_string (amc_profile);
@@ -375,9 +376,8 @@ caps_from_amc_format (GstAmcFormat * amc_format)
     const gchar *profile_string, *level_string;
 
     caps =
-        gst_caps_new_simple ("video/x-h264", "parsed", G_TYPE_BOOLEAN, TRUE,
-        "stream-format", G_TYPE_STRING, "byte-stream",
-        "alignment", G_TYPE_STRING, "au", NULL);
+        gst_caps_new_simple ("video/x-h264",
+        "stream-format", G_TYPE_STRING, "byte-stream", NULL);
 
     if (gst_amc_format_get_int (amc_format, "profile", &amc_profile, NULL)) {
       profile_string = gst_amc_avc_profile_to_string (amc_profile, NULL);
@@ -397,6 +397,8 @@ caps_from_amc_format (GstAmcFormat * amc_format)
     }
   } else if (strcmp (mime, "video/x-vnd.on2.vp8") == 0) {
     caps = gst_caps_new_empty_simple ("video/x-vp8");
+  } else if (strcmp (mime, "video/x-vnd.on2.vp9") == 0) {
+    caps = gst_caps_new_empty_simple ("video/x-vp9");
   }
 
   gst_caps_set_simple (caps, "width", G_TYPE_INT, width,
@@ -728,7 +730,8 @@ _find_nearest_frame (GstAmcVideoEnc * self, GstClockTime reference_timestamp)
       best_id = id;
 
       /* For frames without timestamp we simply take the first frame */
-      if ((reference_timestamp == 0 && timestamp == 0) || diff == 0)
+      if ((reference_timestamp == 0 && !GST_CLOCK_TIME_IS_VALID (timestamp))
+          || diff == 0)
         break;
     }
   }
@@ -855,6 +858,9 @@ gst_amc_video_enc_handle_output_frame (GstAmcVideoEnc * self,
         hdrs = gst_buffer_new_and_alloc (buffer_info->size);
         gst_buffer_fill (hdrs, 0, buf->data + buffer_info->offset,
             buffer_info->size);
+        GST_BUFFER_PTS (hdrs) =
+            gst_util_uint64_scale (buffer_info->presentation_time_us,
+            GST_USECOND, 1);
 
         l = g_list_append (l, hdrs);
         gst_video_encoder_set_headers (encoder, l);
@@ -1016,17 +1022,22 @@ process_buffer:
       " flags 0x%08x", idx, buffer_info.size, buffer_info.presentation_time_us,
       buffer_info.flags);
 
+  buf = gst_amc_codec_get_output_buffer (self->codec, idx, &err);
+  if (err) {
+    if (self->flushing) {
+      g_clear_error (&err);
+      goto flushing;
+    }
+    goto failed_to_get_output_buffer;
+  } else if (!buf) {
+    goto got_null_output_buffer;
+  }
+
   frame =
       _find_nearest_frame (self,
       gst_util_uint64_scale (buffer_info.presentation_time_us, GST_USECOND, 1));
 
   is_eos = ! !(buffer_info.flags & BUFFER_FLAG_END_OF_STREAM);
-
-  buf = gst_amc_codec_get_output_buffer (self->codec, idx, &err);
-  if (err)
-    goto failed_to_get_output_buffer;
-  else if (!buf)
-    goto got_null_output_buffer;
 
   flow_ret =
       gst_amc_video_enc_handle_output_frame (self, buf, &buffer_info, frame);
@@ -1129,9 +1140,7 @@ flow_error:
           gst_event_new_eos ());
       gst_pad_pause_task (GST_VIDEO_ENCODER_SRC_PAD (self));
     } else if (flow_ret == GST_FLOW_NOT_LINKED || flow_ret < GST_FLOW_EOS) {
-      GST_ELEMENT_ERROR (self, STREAM, FAILED,
-          ("Internal data stream error."), ("stream stopped, reason %s",
-              gst_flow_get_name (flow_ret)));
+      GST_ELEMENT_FLOW_ERROR (self, flow_ret);
       gst_pad_push_event (GST_VIDEO_ENCODER_SRC_PAD (self),
           gst_event_new_eos ());
       gst_pad_pause_task (GST_VIDEO_ENCODER_SRC_PAD (self));

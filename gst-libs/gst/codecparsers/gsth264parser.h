@@ -36,6 +36,7 @@
 #endif
 
 #include <gst/gst.h>
+#include <gst/codecparsers/codecparsers-prelude.h>
 
 G_BEGIN_DECLS
 
@@ -178,12 +179,21 @@ typedef enum
 
 /**
  * GstH264ParserResult:
- * @GST_H264_PARSER_OK: The parsing succeded
+ * @GST_H264_PARSER_OK: The parsing succeeded
  * @GST_H264_PARSER_BROKEN_DATA: The data to parse is broken
  * @GST_H264_PARSER_BROKEN_LINK: The link to structure needed for the parsing couldn't be found
- * @GST_H264_PARSER_ERROR: An error occured when parsing
- * @GST_H264_PARSER_NO_NAL: No nal found during the parsing
- * @GST_H264_PARSER_NO_NAL_END: Start of the nal found, but not the end.
+ * @GST_H264_PARSER_ERROR: An error occurred when parsing
+ * @GST_H264_PARSER_NO_NAL: No NAL unit found during the parsing
+ * @GST_H264_PARSER_NO_NAL_END: Start of the NAL unit found, but not the end.
+ *     This will be returned if no start/sync marker for the next NAL unit was
+ *     found. In this case the parser will assume that the end of the data is
+ *     also the end of the NAL unit. Whether this assumption is correct or not
+ *     depends on the context, which only the caller can know, which is why a
+ *     special result value is returned in this case. If the data is NAL-aligned
+ *     then #GST_H264_PARSER_NO_NAL_END can be treated just like
+ *     #GST_H264_PARSER_OK. If the data is not guaranteed to be NAL-aligned,
+ *     then the caller probably wants to collect more data until there's another
+ *     sync marker or the end of the stream has been reached.
  *
  * The result of parsing H264 data.
  */
@@ -249,7 +259,7 @@ typedef enum
  * GstH264SEIPicStructType:
  * @GST_H264_SEI_PIC_STRUCT_FRAME: Picture is a frame
  * @GST_H264_SEI_PIC_STRUCT_TOP_FIELD: Top field of frame
- * @GST_H264_SEI_PIC_STRUCT_BOTTOM_FIELD: Botom field of frame
+ * @GST_H264_SEI_PIC_STRUCT_BOTTOM_FIELD: Bottom field of frame
  * @GST_H264_SEI_PIC_STRUCT_TOP_BOTTOM: Top bottom field of frame
  * @GST_H264_SEI_PIC_STRUCT_BOTTOM_TOP: bottom top field of frame
  * @GST_H264_SEI_PIC_STRUCT_TOP_BOTTOM_TOP: top bottom top field of frame
@@ -358,18 +368,18 @@ struct _GstH264NalUnitExtensionMVC
  *  reference picture.
  * @type: A #GstH264NalUnitType
  * @idr_pic_flag: calculated idr_pic_flag
- * @size: The size of the nal unit starting from @offset, thus
+ * @size: The size of the NAL unit starting from @offset, thus
  *  including the header bytes. e.g. @type (nal_unit_type)
- * @offset: The offset of the actual start of the nal unit, thus
+ * @offset: The offset of the actual start of the NAL unit, thus
  *  including the header bytes
- * @sc_offset: The offset of the start code of the nal unit
- * @valid: If the nal unit is valid, which means it has
+ * @sc_offset: The offset of the start code of the NAL unit
+ * @valid: If the NAL unit is valid, which means it has
  * already been parsed
- * @data: The data from which the Nalu has been parsed
+ * @data: The data from which the NAL unit has been parsed
  * @header_bytes: The size of the NALU header in bytes (Since 1.6)
  * @extension_type: the extension type (Since 1.6)
  *
- * Structure defining the Nal unit headers
+ * Structure defining the NAL unit headers
  */
 struct _GstH264NalUnit
 {
@@ -403,7 +413,7 @@ struct _GstH264NalUnit
  * SchedSelIdx-th CPB
  * @cpb_size_value_minus1: is used together with cpb_size_scale to specify the
  * SchedSelIdx-th CPB size
- * @cbr_flag: Specifies if running in itermediate bitrate mode or constant
+ * @cbr_flag: Specifies if running in constant or intermittent bit rate mode
  * @initial_cpb_removal_delay_length_minus1: specifies the length in bits of
  * the cpb_removal_delay syntax element
  * @cpb_removal_delay_length_minus1: specifies the length in bits of the
@@ -437,7 +447,7 @@ struct _GstH264HRDParams
  * @aspect_ratio_idc specifies the value of the sample aspect ratio of the luma samples
  * @sar_width indicates the horizontal size of the sample aspect ratio
  * @sar_height indicates the vertical size of the sample aspect ratio
- * @overscan_info_present_flag: %TRUE overscan_appropriate_flag is present %FALSE otherwize
+ * @overscan_info_present_flag: %TRUE overscan_appropriate_flag is present %FALSE otherwise
  * @overscan_appropriate_flag: %TRUE indicates that the cropped decoded pictures
  *  output are suitable for display using overscan. %FALSE the cropped decoded pictures
  *  output contain visually important information
@@ -451,7 +461,7 @@ struct _GstH264HRDParams
  * @transfer_characteristics: indicates the opto-electronic transfer characteristic
  * @matrix_coefficients: describes the matrix coefficients used in deriving luma and chroma signals
  * @chroma_loc_info_present_flag: %TRUE specifies that chroma_sample_loc_type_top_field and
- *  chroma_sample_loc_type_bottom_field are present, %FALSE otherwize
+ *  chroma_sample_loc_type_bottom_field are present, %FALSE otherwise
  * @chroma_sample_loc_type_top_field: specify the location of chroma for top field
  * @chroma_sample_loc_type_bottom_field specify the location of chroma for bottom field
  * @timing_info_present_flag: %TRUE specifies that num_units_in_tick,
@@ -460,9 +470,9 @@ struct _GstH264HRDParams
  * time_scale: is the number of time units that pass in one second
  * @fixed_frame_rate_flag: %TRUE indicates that the temporal distance between the HRD output times
  *  of any two consecutive pictures in output order is constrained as specified in the spec, %FALSE
- *  otherwize.
- * @nal_hrd_parameters_present_flag: %TRUE if nal hrd parameters present in the bitstream
- * @vcl_hrd_parameters_present_flag: %TRUE if nal vlc hrd parameters present in the bitstream
+ *  otherwise.
+ * @nal_hrd_parameters_present_flag: %TRUE if NAL HRD parameters exist in the bitstream
+ * @vcl_hrd_parameters_present_flag: %TRUE if VCL HRD parameters exist in the bitstream
  * @low_delay_hrd_flag: specifies the HRD operational mode
  * @pic_struct_present_flag: %TRUE specifies that picture timing SEI messages are present or not
  * @bitstream_restriction_flag: %TRUE specifies that the following coded video sequence bitstream restriction
@@ -710,7 +720,7 @@ struct _GstH264SPS
   gint width, height;
   gint crop_rect_width, crop_rect_height;
   gint crop_rect_x, crop_rect_y;
-  gint fps_num, fps_den;
+  gint fps_num_removed, fps_den_removed; /* FIXME: remove */
   gboolean valid;
 
   /* Subset SPS extensions */
@@ -1015,65 +1025,87 @@ struct _GstH264NalParser
   GstH264PPS *last_pps;
 };
 
+GST_CODEC_PARSERS_API
 GstH264NalParser *gst_h264_nal_parser_new             (void);
 
+GST_CODEC_PARSERS_API
 GstH264ParserResult gst_h264_parser_identify_nalu     (GstH264NalParser *nalparser,
                                                        const guint8 *data, guint offset,
                                                        gsize size, GstH264NalUnit *nalu);
 
+GST_CODEC_PARSERS_API
 GstH264ParserResult gst_h264_parser_identify_nalu_unchecked (GstH264NalParser *nalparser,
                                                        const guint8 *data, guint offset,
                                                        gsize size, GstH264NalUnit *nalu);
 
+GST_CODEC_PARSERS_API
 GstH264ParserResult gst_h264_parser_identify_nalu_avc (GstH264NalParser *nalparser, const guint8 *data,
                                                        guint offset, gsize size, guint8 nal_length_size,
                                                        GstH264NalUnit *nalu);
 
+GST_CODEC_PARSERS_API
 GstH264ParserResult gst_h264_parser_parse_nal         (GstH264NalParser *nalparser,
                                                        GstH264NalUnit *nalu);
 
+GST_CODEC_PARSERS_API
 GstH264ParserResult gst_h264_parser_parse_slice_hdr   (GstH264NalParser *nalparser, GstH264NalUnit *nalu,
                                                        GstH264SliceHdr *slice, gboolean parse_pred_weight_table,
                                                        gboolean parse_dec_ref_pic_marking);
 
+GST_CODEC_PARSERS_API
 GstH264ParserResult gst_h264_parser_parse_subset_sps  (GstH264NalParser *nalparser, GstH264NalUnit *nalu,
                                                        GstH264SPS *sps, gboolean parse_vui_params);
 
+GST_CODEC_PARSERS_API
 GstH264ParserResult gst_h264_parser_parse_sps         (GstH264NalParser *nalparser, GstH264NalUnit *nalu,
                                                        GstH264SPS *sps, gboolean parse_vui_params);
 
+GST_CODEC_PARSERS_API
 GstH264ParserResult gst_h264_parser_parse_pps         (GstH264NalParser *nalparser,
                                                        GstH264NalUnit *nalu, GstH264PPS *pps);
 
+GST_CODEC_PARSERS_API
 GstH264ParserResult gst_h264_parser_parse_sei         (GstH264NalParser *nalparser,
                                                        GstH264NalUnit *nalu, GArray ** messages);
 
+GST_CODEC_PARSERS_API
 void gst_h264_nal_parser_free                         (GstH264NalParser *nalparser);
 
+GST_CODEC_PARSERS_API
 GstH264ParserResult gst_h264_parse_subset_sps         (GstH264NalUnit *nalu,
                                                        GstH264SPS *sps, gboolean parse_vui_params);
 
+GST_CODEC_PARSERS_API
 GstH264ParserResult gst_h264_parse_sps                (GstH264NalUnit *nalu,
                                                        GstH264SPS *sps, gboolean parse_vui_params);
 
+GST_CODEC_PARSERS_API
 GstH264ParserResult gst_h264_parse_pps                (GstH264NalParser *nalparser,
                                                        GstH264NalUnit *nalu, GstH264PPS *pps);
 
+GST_CODEC_PARSERS_API
 void                gst_h264_sps_clear                (GstH264SPS *sps);
+
+GST_CODEC_PARSERS_API
 void                gst_h264_pps_clear                (GstH264PPS *pps);
 
+GST_CODEC_PARSERS_API
 void    gst_h264_quant_matrix_8x8_get_zigzag_from_raster (guint8 out_quant[64],
                                                           const guint8 quant[64]);
 
+GST_CODEC_PARSERS_API
 void    gst_h264_quant_matrix_8x8_get_raster_from_zigzag (guint8 out_quant[64],
                                                           const guint8 quant[64]);
 
+GST_CODEC_PARSERS_API
 void    gst_h264_quant_matrix_4x4_get_zigzag_from_raster (guint8 out_quant[16],
                                                           const guint8 quant[16]);
 
+GST_CODEC_PARSERS_API
 void    gst_h264_quant_matrix_4x4_get_raster_from_zigzag (guint8 out_quant[16],
                                                           const guint8 quant[16]);
 
+GST_CODEC_PARSERS_API
 void gst_h264_video_calculate_framerate (const GstH264SPS * sps, guint field_pic_flag,
     guint pic_struct, gint * fps_num, gint * fps_den);
 

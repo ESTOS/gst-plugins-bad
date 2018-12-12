@@ -18,22 +18,22 @@
  * Boston, MA 02110-1335, USA.
  */
 /**
- * SECTION:element-gstyadif
+ * SECTION:element-yadif
+ * @title: yadif
  *
  * The yadif element deinterlaces video, using the YADIF deinterlacing
  * filter copied from Libav.  This element only handles the simple case
- * of interlaced-mode=interleaved video instead of the more complex
+ * of interlace-mode=interleaved video instead of the more complex
  * inverse telecine and deinterlace cases that are handled by the
  * deinterlace element.
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 -v videotestsrc pattern=ball ! interlace ! yadif ! xvimagesink
  * ]|
  * This pipeline creates an interlaced test pattern, and then deinterlaces
  * it using the yadif filter.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -131,10 +131,10 @@ gst_yadif_class_init (GstYadifClass * klass)
 
   /* Setting up pads and setting metadata should be moved to
      base_class_init if you intend to subclass this class. */
-  gst_element_class_add_pad_template (GST_ELEMENT_CLASS (klass),
-      gst_static_pad_template_get (&gst_yadif_sink_template));
-  gst_element_class_add_pad_template (GST_ELEMENT_CLASS (klass),
-      gst_static_pad_template_get (&gst_yadif_src_template));
+  gst_element_class_add_static_pad_template (GST_ELEMENT_CLASS (klass),
+      &gst_yadif_sink_template);
+  gst_element_class_add_static_pad_template (GST_ELEMENT_CLASS (klass),
+      &gst_yadif_src_template);
 
   gst_element_class_set_static_metadata (GST_ELEMENT_CLASS (klass),
       "YADIF deinterlacer", "Video/Filter",

@@ -22,6 +22,7 @@
 #endif
 
 #include "gstsdpdemux.h"
+#include "gstsdpsrc.h"
 
 static gboolean
 plugin_init (GstPlugin * plugin)
@@ -29,12 +30,14 @@ plugin_init (GstPlugin * plugin)
   if (!gst_element_register (plugin, "sdpdemux", GST_RANK_NONE,
           GST_TYPE_SDP_DEMUX))
     return FALSE;
+  if (!gst_element_register (plugin, "sdpsrc", GST_RANK_NONE, GST_TYPE_SDP_SRC))
+    return FALSE;
 
   return TRUE;
 }
 
 GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
     GST_VERSION_MINOR,
-    sdp,
+    sdpelem,
     "configure streaming sessions using SDP",
     plugin_init, VERSION, GST_LICENSE, GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)

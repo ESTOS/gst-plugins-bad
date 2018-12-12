@@ -18,11 +18,11 @@ libgstapplemedia_la_CPPFLAGS =			\
 	-Dgst_core_video_buffer_get_type=gst_core_video_buffer_priv_get_type
 
 libgstapplemedia_la_CFLAGS =			\
-	-I$(top_srcdir)/gst-libs                \
-	-I$(top_builddir)/gst-libs              \
-	$(GST_CFLAGS)				\
+	$(GST_PLUGINS_BAD_CFLAGS)		\
+	$(GST_PLUGINS_BASE_CFLAGS)		\
+	$(GST_GL_CFLAGS)			\
 	$(GST_BASE_CFLAGS)			\
-	$(GST_PLUGINS_BASE_CFLAGS)
+	$(GST_CFLAGS)
 
 if HAVE_IOS
 GST_OBJCFLAGS_WITH_VERSION = $(GST_OBJCFLAGS)
@@ -35,24 +35,27 @@ endif
 libgstapplemedia_la_OBJCFLAGS =			\
 	-I$(top_srcdir)/gst-libs                \
 	-I$(top_builddir)/gst-libs              \
+	-fobjc-arc                              \
 	$(GST_OBJCFLAGS_WITH_VERSION)		\
+	$(GST_PLUGINS_BASE_CFLAGS)		\
+	$(GST_GL_CFLAGS)			\
 	$(GST_BASE_CFLAGS)			\
-	$(GST_PLUGINS_BASE_CFLAGS)
+	$(GST_CFLAGS)
 
 if HAVE_IOS
 libgstapplemedia_la_OBJCFLAGS += -fobjc-abi-version=2 -fobjc-legacy-dispatch
 endif
 
 libgstapplemedia_la_LIBADD =						\
-	$(top_builddir)/gst-libs/gst/gl/libgstgl-$(GST_API_VERSION).la 	\
-	$(GST_BASE_LIBS)						\
 	$(GST_PLUGINS_BASE_LIBS)					\
 	-lgstvideo-$(GST_API_VERSION) 					\
 	-lgstaudio-$(GST_API_VERSION)					\
 	-lgstpbutils-$(GST_API_VERSION) 				\
+	$(GST_GL_LIBS)							\
+	$(GST_BASE_LIBS)						\
 	$(GMODULE_NO_EXPORT_LIBS)
 
-libgstapplemedia_la_LIBTOOLFLAGS = $(GST_PLUGIN_LIBTOOLFLAGS) --tag=CC
+libgstapplemedia_la_LIBTOOLFLAGS = --tag=CC
 
 libgstapplemedia_la_LDFLAGS =			\
 	$(GST_PLUGIN_LDFLAGS)			\
@@ -64,7 +67,6 @@ libgstapplemedia_la_LDFLAGS =			\
 	-Wl,-framework -Wl,AudioToolbox
 
 noinst_HEADERS =				\
-	qtkitvideosrc.h				\
 	avfvideosrc.h				\
 	avsamplevideosink.h			\
 	vtenc.h					\
@@ -72,16 +74,20 @@ noinst_HEADERS =				\
 	vtutil.h				\
 	corevideobuffer.h			\
 	coremediabuffer.h			\
+	corevideomemory.h			\
 	videotexturecache.h			\
 	atdec.h 				\
 	iosassetsrc.h				\
+	iosurfacememory.h			\
 	avfassetsrc.h  				\
-	glcontexthelper.h
+	glcontexthelper.h 			\
+	iosglmemory.h
 
 if HAVE_IOS
 
 libgstapplemedia_la_SOURCES +=			\
-	iosassetsrc.m
+	iosassetsrc.m 				\
+	iosglmemory.c
 
 libgstapplemedia_la_LDFLAGS +=			\
 	-Wl,-framework -Wl,Foundation		\
@@ -90,12 +96,11 @@ libgstapplemedia_la_LDFLAGS +=			\
 else
 
 libgstapplemedia_la_SOURCES +=			\
-	qtkitvideosrc.m 					\
 	iosurfacememory.c
 
 libgstapplemedia_la_LDFLAGS +=			\
 	-Wl,-framework -Wl,Cocoa		\
-	-Wl,-framework -Wl,QTKit		\
+	-Wl,-framework -Wl,OpenGL 		\
 	-Wl,-framework -Wl,IOSurface
 
 endif

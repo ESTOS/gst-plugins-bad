@@ -231,7 +231,7 @@ _vdp_video_mem_free (GstAllocator * allocator, GstMemory * mem)
  * gst_vdp_video_memory_alloc:
  * @device: a #GstVdpDevice
  * @info: the #GstVideoInfo describing the format to use
- * 
+ *
  * Returns: a GstMemory object with a VdpVideoSurface specified by @info
  * from @device
  */
@@ -283,6 +283,7 @@ gst_vdp_video_memory_init (void)
   if (g_once_init_enter (&_init)) {
     _vdp_video_allocator =
         g_object_new (gst_vdp_video_allocator_get_type (), NULL);
+    gst_object_ref_sink (_vdp_video_allocator);
 
     gst_allocator_register (GST_VDP_VIDEO_MEMORY_ALLOCATOR,
         gst_object_ref (_vdp_video_allocator));

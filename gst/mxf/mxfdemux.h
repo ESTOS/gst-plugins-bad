@@ -23,6 +23,7 @@
 #include <gst/gst.h>
 #include <gst/base/gstadapter.h>
 #include <gst/base/gstflowcombiner.h>
+#include <gst/video/video.h>
 
 #include "mxfessence.h"
 
@@ -58,12 +59,6 @@ typedef struct
 
 typedef struct
 {
-  guint64 offset;
-  gboolean keyframe;
-} GstMXFDemuxIndex;
-
-typedef struct
-{
   guint32 body_sid;
   guint32 index_sid;
   guint32 track_number;
@@ -86,12 +81,30 @@ typedef struct
   GstTagList *tags;
 
   GstCaps *caps;
+  gboolean intra_only;
 } GstMXFDemuxEssenceTrack;
+
+typedef struct
+{
+  /* 0 if uninitialized */
+  guint64 offset;
+
+  /* PTS edit unit number or G_MAXUINT64 */
+  guint64 pts;
+
+  /* DTS edit unit number if we got here via PTS */
+  guint64 dts;
+
+  gboolean keyframe;
+  gboolean initialized;
+} GstMXFDemuxIndex;
 
 typedef struct
 {
   guint32 body_sid;
   guint32 index_sid;
+
+  /* offsets indexed by DTS */
   GArray *offsets;
 } GstMXFDemuxIndexTable;
 
@@ -104,6 +117,9 @@ struct _GstMXFDemuxPad
 
   GstClockTime position;
   gdouble position_accumulated_error;
+  /* Current position in the material track */
+  gint64 current_material_track_position;
+
   gboolean eos, discont;
 
   GstTagList *tags;
@@ -111,9 +127,15 @@ struct _GstMXFDemuxPad
   MXFMetadataGenericPackage *material_package;
   MXFMetadataTimelineTrack *material_track;
 
+  GstVideoTimeCode start_timecode;
+
   guint current_component_index;
   MXFMetadataSourceClip *current_component;
 
+  /* Position in the material track where this component started */
+  gint64 current_component_start_position;
+
+  /* Position/duration in the source track */
   gint64 current_component_start;
   gint64 current_component_duration;
 

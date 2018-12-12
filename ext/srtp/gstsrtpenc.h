@@ -47,8 +47,7 @@
 #ifndef __GST_SRTPENC_H__
 #define __GST_SRTPENC_H__
 
-#include <gst/gst.h>
-#include <srtp/srtp.h>
+#include "gstsrtp.h"
 
 G_BEGIN_DECLS
 
@@ -84,14 +83,13 @@ struct _GstSrtpEnc
 
   guint replay_window_size;
   gboolean allow_repeat_tx;
+
+  GHashTable *ssrcs_set;
 };
 
 struct _GstSrtpEncClass
 {
   GstElementClass parent_class;
-
-  /* action signals */
-  guint32 (*get_rollover_counter) (GstSrtpEnc *encoder, guint32 ssrc);
 };
 
 GType gst_srtp_enc_get_type (void);

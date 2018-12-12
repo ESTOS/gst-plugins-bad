@@ -20,16 +20,16 @@
 
 /**
  * SECTION:element-faac
+ * @title: faac
  * @see_also: faad
  *
  * faac encodes raw audio to AAC (MPEG-4 part 3) streams.
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 audiotestsrc wave=sine num-buffers=100 ! audioconvert ! faac ! matroskamux ! filesink location=sine.mkv
  * ]| Encode a sine beep as aac and write to matroska container.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -191,8 +191,7 @@ gst_faac_class_init (GstFaacClass * klass)
 
   GST_DEBUG_CATEGORY_INIT (faac_debug, "faac", 0, "AAC encoding");
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&src_template));
+  gst_element_class_add_static_pad_template (gstelement_class, &src_template);
 
   sink_caps = gst_faac_enc_generate_sink_caps ();
   sink_templ = gst_pad_template_new ("sink",

@@ -24,7 +24,7 @@
 
 #include "gstmpegvideometa.h"
 
-GST_DEBUG_CATEGORY (mpegv_meta_debug);
+GST_DEBUG_CATEGORY_STATIC (mpegv_meta_debug);
 #define GST_CAT_DEFAULT mpegv_meta_debug
 
 static gboolean
@@ -37,6 +37,7 @@ gst_mpeg_video_meta_init (GstMpegVideoMeta * mpeg_video_meta,
   mpeg_video_meta->pichdr = NULL;
   mpeg_video_meta->picext = NULL;
   mpeg_video_meta->quantext = NULL;
+  mpeg_video_meta->num_slices = mpeg_video_meta->slice_offset = 0;
 
   return TRUE;
 }
@@ -113,13 +114,14 @@ gst_mpeg_video_meta_get_info (void)
 {
   static const GstMetaInfo *mpeg_video_meta_info = NULL;
 
-  if (g_once_init_enter (&mpeg_video_meta_info)) {
+  if (g_once_init_enter ((GstMetaInfo **) & mpeg_video_meta_info)) {
     const GstMetaInfo *meta = gst_meta_register (GST_MPEG_VIDEO_META_API_TYPE,
         "GstMpegVideoMeta", sizeof (GstMpegVideoMeta),
         (GstMetaInitFunction) gst_mpeg_video_meta_init,
         (GstMetaFreeFunction) gst_mpeg_video_meta_free,
         (GstMetaTransformFunction) gst_mpeg_video_meta_transform);
-    g_once_init_leave (&mpeg_video_meta_info, meta);
+    g_once_init_leave ((GstMetaInfo **) & mpeg_video_meta_info,
+        (GstMetaInfo *) meta);
   }
 
   return mpeg_video_meta_info;

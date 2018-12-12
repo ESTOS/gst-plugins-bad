@@ -18,18 +18,18 @@
  */
 /**
  * SECTION:element-gstaudiochannelmix
+ * @title: gstaudiochannelmix
  *
  * The audiochannelmix element mixes channels in stereo audio based on
  * properties set on the element.  The primary purpose is reconstruct
  * equal left/right channels on an input stream that has audio in only
  * one channel.
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 -v audiotestsrc ! audiochannelmix ! autoaudiosink
  * ]|
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -102,10 +102,10 @@ gst_audio_channel_mix_class_init (GstAudioChannelMixClass * klass)
 
   /* Setting up pads and setting metadata should be moved to
      base_class_init if you intend to subclass this class. */
-  gst_element_class_add_pad_template (GST_ELEMENT_CLASS (klass),
-      gst_static_pad_template_get (&gst_audio_channel_mix_src_template));
-  gst_element_class_add_pad_template (GST_ELEMENT_CLASS (klass),
-      gst_static_pad_template_get (&gst_audio_channel_mix_sink_template));
+  gst_element_class_add_static_pad_template (GST_ELEMENT_CLASS (klass),
+      &gst_audio_channel_mix_src_template);
+  gst_element_class_add_static_pad_template (GST_ELEMENT_CLASS (klass),
+      &gst_audio_channel_mix_sink_template);
 
   gst_element_class_set_static_metadata (GST_ELEMENT_CLASS (klass),
       "Simple stereo audio mixer", "Audio/Mixer", "Mixes left/right channels "

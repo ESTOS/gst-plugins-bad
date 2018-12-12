@@ -18,15 +18,15 @@
  */
 /**
  * SECTION:element-dvdspu
+ * @title: dvdspu
  *
  * DVD sub picture overlay element.
- * 
- * <refsect2>
- * <title>Example launch line</title>
+ *
+ * ## Example launch line
  * |[
  * FIXME: gst-launch-1.0 ...
  * ]| FIXME: description for the sample launch pipeline
- * </refsect2>
+ *
  */
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
@@ -131,12 +131,11 @@ gst_dvd_spu_class_init (GstDVDSpuClass * klass)
 
   gstelement_class->change_state = gst_dvd_spu_change_state;
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&src_factory));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&video_sink_factory));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&subpic_sink_factory));
+  gst_element_class_add_static_pad_template (gstelement_class, &src_factory);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &video_sink_factory);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &subpic_sink_factory);
 
   gst_element_class_set_static_metadata (gstelement_class,
       "Sub-picture Overlay", "Mixer/Video/Overlay/SubPicture/DVD/Bluray",
@@ -665,7 +664,9 @@ gstspu_render (GstDVDSpu * dvdspu, GstBuffer * buf)
 {
   GstVideoFrame frame;
 
-  gst_video_frame_map (&frame, &dvdspu->spu_state.info, buf, GST_MAP_READWRITE);
+  if (!gst_video_frame_map (&frame, &dvdspu->spu_state.info, buf,
+          GST_MAP_READWRITE))
+    return;
 
   switch (dvdspu->spu_input_type) {
     case SPU_INPUT_TYPE_VOBSUB:

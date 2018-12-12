@@ -26,6 +26,7 @@
 
 /**
  * SECTION:vkimagememory
+ * @title: GstVkImageMemory
  * @short_description: memory subclass for Vulkan image memory
  * @see_also: #GstMemory, #GstAllocator
  *
@@ -61,7 +62,7 @@ gst_vulkan_format_from_video_format (GstVideoFormat v_format, guint plane)
       break;
     case GST_VIDEO_FORMAT_RGB16:
     case GST_VIDEO_FORMAT_BGR16:
-      return GST_VIDEO_GL_TEXTURE_TYPE_RGB16;
+      return VK_FORMAT_R5G6B5_UNORM_PACK16;
     case GST_VIDEO_FORMAT_GRAY16_BE:
     case GST_VIDEO_FORMAT_GRAY16_LE:
     case GST_VIDEO_FORMAT_YUY2:
@@ -549,6 +550,7 @@ gst_vulkan_image_memory_init_once (void)
 
     _vulkan_image_memory_allocator =
         g_object_new (gst_vulkan_image_memory_allocator_get_type (), NULL);
+    gst_object_ref_sink (_vulkan_image_memory_allocator);
 
     gst_allocator_register (GST_VULKAN_IMAGE_MEMORY_ALLOCATOR_NAME,
         gst_object_ref (_vulkan_image_memory_allocator));
@@ -559,7 +561,7 @@ gst_vulkan_image_memory_init_once (void)
 /**
  * gst_is_vulkan_image_memory:
  * @mem:a #GstMemory
- * 
+ *
  * Returns: whether the memory at @mem is a #GstVulkanImageMemory
  */
 gboolean

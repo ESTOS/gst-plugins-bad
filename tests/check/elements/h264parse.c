@@ -65,6 +65,12 @@ GstStaticPadTemplate srctemplate = GST_STATIC_PAD_TEMPLATE ("src",
 
 /* some data */
 
+/* AUD */
+static guint8 h264_aud[] = {
+  0x00, 0x00, 0x00, 0x01, 0x09, 0xf0
+};
+
+
 /* SPS */
 static guint8 h264_sps[] = {
   0x00, 0x00, 0x00, 0x01, 0x67, 0x4d, 0x40, 0x15,
@@ -129,14 +135,25 @@ verify_buffer (buffer_verify_data_s * vdata, GstBuffer * buffer)
     /* check separate header NALs */
     gint i = vdata->buffer_counter;
     guint ofs;
+    gboolean aud;
 
     /* SEI with start code prefix with 2 0-bytes */
-    ofs = i == 1;
+    ofs = i == 2;
+    aud = i == 0;
+    fail_unless (i <= 3);
 
-    fail_unless (i <= 2);
-    fail_unless (gst_buffer_get_size (buffer) == ctx_headers[i].size - ofs);
-    fail_unless (gst_buffer_memcmp (buffer, 0, ctx_headers[i].data + ofs,
-            gst_buffer_get_size (buffer)) == 0);
+    if (aud) {
+      fail_unless (gst_buffer_get_size (buffer) == sizeof (h264_aud));
+      fail_unless (gst_buffer_memcmp (buffer, 0, h264_aud,
+              gst_buffer_get_size (buffer)) == 0);
+      vdata->discard++;
+    } else {
+      i -= 1;
+
+      fail_unless (gst_buffer_get_size (buffer) == ctx_headers[i].size - ofs);
+      fail_unless (gst_buffer_memcmp (buffer, 0, ctx_headers[i].data + ofs,
+              gst_buffer_get_size (buffer)) == 0);
+    }
   } else {
     GstMapInfo map;
 
@@ -152,6 +169,16 @@ verify_buffer (buffer_verify_data_s * vdata, GstBuffer * buffer)
       gst_buffer_unmap (buffer, &map);
       return TRUE;
     } else if (GST_READ_UINT32_BE (map.data) == 0x01) {
+      gboolean aud = FALSE;
+      aud = vdata->buffer_counter % 2;
+      if (aud) {
+        fail_unless (gst_buffer_get_size (buffer) == sizeof (h264_aud));
+        fail_unless (gst_buffer_memcmp (buffer, 0, h264_aud,
+                gst_buffer_get_size (buffer)) == 0);
+        gst_buffer_unmap (buffer, &map);
+        return TRUE;
+      }
+
       /* this is not avc, use default tests from parser.c */
       gst_buffer_unmap (buffer, &map);
       return FALSE;
@@ -204,9 +231,12 @@ verify_buffer_bs_au (buffer_verify_data_s * vdata, GstBuffer * buffer)
   if (vdata->buffer_counter == 0) {
     guint8 *data = map.data;
 
-    /* SPS, SEI, PPS */
+    /* AUD, SPS, SEI, PPS */
     fail_unless (map.size == vdata->data_to_verify_size +
-        ctx_headers[0].size + ctx_headers[1].size + ctx_headers[2].size);
+        sizeof (h264_aud) + ctx_headers[0].size +
+        ctx_headers[1].size + ctx_headers[2].size);
+    fail_unless (memcmp (data, h264_aud, sizeof (h264_aud)) == 0);
+    data += sizeof (h264_aud);
     fail_unless (memcmp (data, ctx_headers[0].data, ctx_headers[0].size) == 0);
     data += ctx_headers[0].size;
     fail_unless (memcmp (data, ctx_headers[1].data, ctx_headers[1].size) == 0);
@@ -219,8 +249,11 @@ verify_buffer_bs_au (buffer_verify_data_s * vdata, GstBuffer * buffer)
             vdata->data_to_verify_size) == 0);
   } else {
     /* IDR frame */
-    fail_unless (map.size == vdata->data_to_verify_size);
-    fail_unless (memcmp (map.data, vdata->data_to_verify, map.size) == 0);
+    guint aud_size = sizeof (h264_aud);
+    fail_unless (map.size == vdata->data_to_verify_size + aud_size);
+    fail_unless (memcmp (map.data, h264_aud, aud_size) == 0);
+    fail_unless (memcmp (map.data + aud_size, vdata->data_to_verify,
+            map.size - aud_size) == 0);
   }
 
   gst_buffer_unmap (buffer, &map);
@@ -311,6 +344,59 @@ GST_START_TEST (test_parse_detect_stream)
 
 GST_END_TEST;
 
+static GstStaticPadTemplate srctemplate_avc_au_and_bs_au =
+    GST_STATIC_PAD_TEMPLATE ("src",
+    GST_PAD_SRC,
+    GST_PAD_ALWAYS,
+    GST_STATIC_CAPS (SRC_CAPS_TMPL
+        ", stream-format = (string) avc, alignment = (string) au; "
+        SRC_CAPS_TMPL
+        ", stream-format = (string) byte-stream, alignment = (string) au")
+    );
+
+GST_START_TEST (test_sink_caps_reordering)
+{
+  /* Upstream can handle avc and byte-stream format (in that preference order)
+   * and downstream requires byte-stream.
+   * Parser reorder upstream's caps to prefer the format requested downstream
+   * and so avoid doing useless conversions. */
+  GstElement *parser;
+  GstPad *sink, *src;
+  GstCaps *src_caps, *sink_caps;
+  GstStructure *s;
+
+  parser = gst_check_setup_element ("h264parse");
+  fail_unless (parser);
+
+  src = gst_check_setup_src_pad (parser, &srctemplate_avc_au_and_bs_au);
+  sink = gst_check_setup_sink_pad (parser, &sinktemplate_bs_au);
+
+  src_caps = gst_pad_get_pad_template_caps (src);
+  sink_caps = gst_pad_peer_query_caps (src, src_caps);
+
+  /* Sink pad has both format on its sink caps but prefer to use byte-stream */
+  g_assert_cmpuint (gst_caps_get_size (sink_caps), ==, 2);
+
+  s = gst_caps_get_structure (sink_caps, 0);
+  g_assert_cmpstr (gst_structure_get_name (s), ==, "video/x-h264");
+  g_assert_cmpstr (gst_structure_get_string (s, "alignment"), ==, "au");
+  g_assert_cmpstr (gst_structure_get_string (s, "stream-format"), ==,
+      "byte-stream");
+
+  s = gst_caps_get_structure (sink_caps, 1);
+  g_assert_cmpstr (gst_structure_get_name (s), ==, "video/x-h264");
+  g_assert_cmpstr (gst_structure_get_string (s, "alignment"), ==, "au");
+  g_assert_cmpstr (gst_structure_get_string (s, "stream-format"), ==, "avc");
+
+  gst_caps_unref (src_caps);
+  gst_caps_unref (sink_caps);
+  gst_object_unref (src);
+  gst_object_unref (sink);
+  gst_object_unref (parser);
+}
+
+GST_END_TEST;
+
 
 static Suite *
 h264parse_suite (void)
@@ -325,6 +411,7 @@ h264parse_suite (void)
   tcase_add_test (tc_chain, test_parse_split);
   tcase_add_test (tc_chain, test_parse_skip_garbage);
   tcase_add_test (tc_chain, test_parse_detect_stream);
+  tcase_add_test (tc_chain, test_sink_caps_reordering);
 
   return s;
 }
@@ -344,6 +431,10 @@ verify_buffer_packetized (buffer_verify_data_s * vdata, GstBuffer * buffer)
     gint size;
 
     if (vdata->buffer_counter == 0) {
+      data = h264_aud;
+      size = sizeof (h264_aud);
+      vdata->discard++;
+    } else if (vdata->buffer_counter == 1) {
       data = h264_sps;
       size = sizeof (h264_sps);
     } else {
@@ -354,9 +445,19 @@ verify_buffer_packetized (buffer_verify_data_s * vdata, GstBuffer * buffer)
     fail_unless (map.size == size);
     fail_unless (memcmp (map.data + 4, data + 4, size - 4) == 0);
   } else {
-    fail_unless (map.size == vdata->data_to_verify_size);
-    fail_unless (memcmp (map.data + 4,
-            vdata->data_to_verify + 4, map.size - 4) == 0);
+    guint8 *data;
+    gint size;
+    gboolean aud = vdata->buffer_counter % 2;
+    if (aud) {
+      data = h264_aud;
+      size = sizeof (h264_aud);
+    } else {
+      data = (gpointer) vdata->data_to_verify;
+      size = map.size;
+    }
+
+    fail_unless (map.size == size);
+    fail_unless (memcmp (map.data + 4, data + 4, size - 4) == 0);
   }
   gst_buffer_unmap (buffer, &map);
 
@@ -443,6 +544,7 @@ main (int argc, char **argv)
   ctx_headers[2].data = h264_pps;
   ctx_headers[2].size = sizeof (h264_pps);
   ctx_verify_buffer = verify_buffer;
+  ctx_frame_generated = TRUE;
   /* discard initial sps/pps buffers */
   ctx_discard = 3;
   /* no timing info to parse */
@@ -454,22 +556,17 @@ main (int argc, char **argv)
 
   ctx_suite = "h264parse_to_bs_nal";
   s = h264parse_suite ();
-  sr = srunner_create (s);
-  srunner_run_all (sr, CK_NORMAL);
-  nf += srunner_ntests_failed (sr);
-  srunner_free (sr);
+  nf += gst_check_run_suite (s, ctx_suite, __FILE__ "_to_bs_nal.c");
 
   /* setup and tweak to handle bs au output */
   ctx_suite = "h264parse_to_bs_au";
   ctx_sink_template = &sinktemplate_bs_au;
   ctx_verify_buffer = verify_buffer_bs_au;
   ctx_discard = 0;
+  ctx_frame_generated = FALSE;
 
   s = h264parse_suite ();
-  sr = srunner_create (s);
-  srunner_run_all (sr, CK_NORMAL);
-  nf += srunner_ntests_failed (sr);
-  srunner_free (sr);
+  nf += gst_check_run_suite (s, ctx_suite, __FILE__ "_to_bs_au.c");
 
   /* setup and tweak to handle avc au output */
   ctx_suite = "h264parse_to_avc_au";
@@ -493,10 +590,7 @@ main (int argc, char **argv)
   ctx_codec_data = TRUE;
 
   s = h264parse_suite ();
-  sr = srunner_create (s);
-  srunner_run_all (sr, CK_NORMAL);
-  nf += srunner_ntests_failed (sr);
-  srunner_free (sr);
+  nf += gst_check_run_suite (s, ctx_suite, __FILE__ "_to_avc3_au.c");
 
   /* setup and tweak to handle avc packetized input */
   h264_codec_data = h264_avc_codec_data;
@@ -506,6 +600,7 @@ main (int argc, char **argv)
   ctx_sink_template = &sinktemplate_bs_nal;
   /* and ignore inserted codec-data NALs */
   ctx_discard = 2;
+  ctx_frame_generated = TRUE;
   /* no more config headers */
   ctx_headers[0].data = NULL;
   ctx_headers[1].data = NULL;
@@ -517,10 +612,7 @@ main (int argc, char **argv)
   ctx_verify_buffer = verify_buffer_packetized;
 
   s = h264parse_packetized_suite ();
-  sr = srunner_create (s);
-  srunner_run_all (sr, CK_NORMAL);
-  nf += srunner_ntests_failed (sr);
-  srunner_free (sr);
+  nf += gst_check_run_suite (s, ctx_suite, __FILE__ "_packetized.c");
 
   return nf;
 }

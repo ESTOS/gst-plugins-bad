@@ -1,5 +1,5 @@
 /* GStreamer Adaptive Multi-Rate Wide-Band (AMR-WB) plugin
- * Copyright (C) 2006 Edgard Lima <edgard.lima@indt.org.br>
+ * Copyright (C) 2006 Edgard Lima <edgard.lima@gmail.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -19,19 +19,19 @@
 
 /**
  * SECTION:element-voamrwbenc
+ * @title: voamrwbenc
  * @see_also: #GstAmrWbDec, #GstAmrWbParse
  *
- * AMR wideband encoder based on the 
+ * AMR wideband encoder based on the
  * <ulink url="http://www.penguin.cz/~utx/amr">reference codec implementation</ulink>.
- * 
- * <refsect2>
- * <title>Example launch line</title>
+ *
+ * ## Example launch line
  * |[
  * gst-launch filesrc location=abc.wav ! wavparse ! audioresample ! audioconvert ! voamrwbenc ! filesink location=abc.amr
  * ]|
  * Please note that the above stream misses the header, that is needed to play
  * the stream.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -162,10 +162,8 @@ gst_voamrwbenc_class_init (GstVoAmrWbEncClass * klass)
   object_class->set_property = gst_voamrwbenc_set_property;
   object_class->get_property = gst_voamrwbenc_get_property;
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sink_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&src_template));
+  gst_element_class_add_static_pad_template (element_class, &sink_template);
+  gst_element_class_add_static_pad_template (element_class, &src_template);
 
   gst_element_class_set_static_metadata (element_class, "AMR-WB audio encoder",
       "Codec/Encoder/Audio",

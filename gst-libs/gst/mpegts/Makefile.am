@@ -19,6 +19,7 @@ libgstmpegts_@GST_API_VERSION@include_HEADERS = \
 	gst-scte-section.h			\
 	gstmpegtsdescriptor.h			\
 	gst-dvb-descriptor.h			\
+	mpegts-prelude.h			\
 	mpegts.h
 
 nodist_libgstmpegts_@GST_API_VERSION@include_HEADERS = \
@@ -48,6 +49,8 @@ glib_enum_headers=gstmpegtssection.h	\
 glib_enum_define=GST_MPEGTS
 glib_gen_prefix=gst_mpegts
 glib_gen_basename=gstmpegts
+glib_gen_decl_banner=GST_MPEGTS_API
+glib_gen_decl_include=\#include <gst/mpegts/mpegts-prelude.h>
 
 BUILT_SOURCES = gstmpegts-enumtypes.c gstmpegts-enumtypes.h
 nodist_libgstmpegts_@GST_API_VERSION@_la_SOURCES = gstmpegts-enumtypes.c
@@ -65,6 +68,7 @@ gir_sources+=$(patsubst %,$(builddir)/%, $(built_sources))
 GstMpegts-@GST_API_VERSION@.gir: $(INTROSPECTION_SCANNER) libgstmpegts-@GST_API_VERSION@.la
 	$(AM_V_GEN)PKG_CONFIG_PATH="$(GST_PKG_CONFIG_PATH)"  GI_SCANNER_DISABLE_CACHE=yes\
 		GST_PLUGIN_SYSTEM_PATH_1_0="" GST_PLUGIN_PATH_1_0="" GST_REGISTRY_UPDATE=no \
+		CPPFLAGS="$(CPPFLAGS)" CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" CC="$(CC)" PKG_CONFIG="$(PKG_CONFIG)" DLLTOOL="$(DLLTOOL)" \
 		$(INTROSPECTION_SCANNER) -v --namespace GstMpegts \
 		--nsversion=@GST_API_VERSION@ \
 		--identifier-prefix=GstMpegts \

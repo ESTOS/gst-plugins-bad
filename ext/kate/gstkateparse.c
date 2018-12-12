@@ -21,40 +21,35 @@
 
 /**
  * SECTION:element-kateparse
+ * @title: kateparse
  * @short_description: parses kate streams
  * @see_also: katedec, vorbisparse, oggdemux, theoraparse
  *
- * <refsect2>
- * <para>
  * The kateparse element will parse the header packets of the Kate
  * stream and put them as the streamheader in the caps. This is used in the
  * multifdsink case where you want to stream live kate streams to multiple
  * clients, each client has to receive the streamheaders first before they can
  * consume the kate packets.
- * </para>
- * <para>
+ *
  * This element also makes sure that the buffers that it pushes out are properly
  * timestamped and that their offset and offset_end are set. The buffers that
  * kateparse outputs have all of the metadata that oggmux expects to receive,
  * which allows you to (for example) remux an ogg/kate file.
- * </para>
- * <title>Example pipelines</title>
- * <para>
- * <programlisting>
+ *
+ * ## Example pipelines
+ *
+ * |[
  * gst-launch-1.0 -v filesrc location=kate.ogg ! oggdemux ! kateparse ! fakesink
- * </programlisting>
+ * ]|
  * This pipeline shows that the streamheader is set in the caps, and that each
  * buffer has the timestamp, duration, offset, and offset_end set.
- * </para>
- * <para>
- * <programlisting>
+ *
+ * |[
  * gst-launch-1.0 filesrc location=kate.ogg ! oggdemux ! kateparse \
  *            ! oggmux ! filesink location=kate-remuxed.ogg
- * </programlisting>
+ * ]|
  * This pipeline shows remuxing. kate-remuxed.ogg might not be exactly the same
  * as kate.ogg, but they should produce exactly the same decoded data.
- * </para>
- * </refsect2>
  *
  */
 
@@ -109,10 +104,10 @@ gst_kate_parse_class_init (GstKateParseClass * klass)
 
   gstelement_class->change_state = gst_kate_parse_change_state;
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_kate_parse_src_factory));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_kate_parse_sink_factory));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &gst_kate_parse_src_factory);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &gst_kate_parse_sink_factory);
 
   gst_element_class_set_static_metadata (gstelement_class, "Kate stream parser",
       "Codec/Parser/Subtitle",

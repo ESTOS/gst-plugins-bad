@@ -25,8 +25,7 @@
 #include "corevideomemory.h"
 #ifdef HAVE_IOS
 #include "iosassetsrc.h"
-#else
-#include "qtkitvideosrc.h"
+#include "iosglmemory.h"
 #endif
 #ifdef HAVE_AVFOUNDATION
 #include "avfvideosrc.h"
@@ -54,7 +53,6 @@ enable_mt_mode (void)
 {
   NSThread * th = [[NSThread alloc] init];
   [th start];
-  [th release];
   g_assert ([NSThread isMultiThreaded]);
 }
 #endif
@@ -67,13 +65,12 @@ plugin_init (GstPlugin * plugin)
   gst_apple_core_video_memory_init ();
 
 #ifdef HAVE_IOS
+  gst_ios_gl_memory_init ();
+
   res &= gst_element_register (plugin, "iosassetsrc", GST_RANK_SECONDARY,
       GST_TYPE_IOS_ASSET_SRC);
 #else
   enable_mt_mode ();
-
-  res = gst_element_register (plugin, "qtkitvideosrc", GST_RANK_SECONDARY,
-      GST_TYPE_QTKIT_VIDEO_SRC);
 #endif
 
 #ifdef HAVE_AVFOUNDATION
@@ -103,4 +100,4 @@ GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
     GST_VERSION_MINOR,
     applemedia,
     "Elements for capture and codec access on Apple OS X and iOS",
-    plugin_init, VERSION, "LGPL", "GStreamer", "http://gstreamer.net/")
+    plugin_init, VERSION, "LGPL", GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)

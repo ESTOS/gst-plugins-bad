@@ -25,6 +25,7 @@
 
 /**
  * SECTION:element-input-selector
+ * @title: input-selector
  * @see_also: #GstOutputSelector
  *
  * Direct one out of N input streams to the output pad.
@@ -32,21 +33,11 @@
  * The input pads are from a GstPad subclass and have additional
  * properties, which users may find useful, namely:
  *
- * <itemizedlist>
- * <listitem>
- * "running-time": Running time of stream on pad (#gint64)
- * </listitem>
- * <listitem>
- * "tags": The currently active tags on the pad (#GstTagList, boxed type)
- * </listitem>
- * <listitem>
- * "active": If the pad is currently active (#gboolean)
- * </listitem>
- * <listitem>
- * "always-ok" : Make an inactive pads return #GST_FLOW_OK instead of
- * #GST_FLOW_NOT_LINKED
- * </listitem>
- * </itemizedlist>
+ * * "running-time": Running time of stream on pad (#gint64)
+ * * "tags": The currently active tags on the pad (#GstTagList, boxed type)
+ * * "active": If the pad is currently active (#gboolean)
+ * * "always-ok" : Make an inactive pads return #GST_FLOW_OK instead of #GST_FLOW_NOT_LINKED
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -704,6 +695,7 @@ gst_input_selector_wait_running_time (RsnInputSelector * sel,
           cur_running_time -= base_time;
         else
           cur_running_time = 0;
+        gst_object_unref (clock);
       }
     } else {
       GstSegment *active_seg;
@@ -823,6 +815,7 @@ gst_input_selector_cleanup_old_cached_buffers (RsnInputSelector * sel,
         cur_running_time -= base_time;
       else
         cur_running_time = 0;
+      gst_object_unref (clock);
     }
   } else {
     GstPad *active_sinkpad;
@@ -1236,10 +1229,10 @@ gst_input_selector_class_init (RsnInputSelectorClass * klass)
       "Julien Moutte <julien@moutte.net>, "
       "Jan Schmidt <thaytan@mad.scientist.com>, "
       "Wim Taymans <wim.taymans@gmail.com>");
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_input_selector_sink_factory));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_input_selector_src_factory));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &gst_input_selector_sink_factory);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &gst_input_selector_src_factory);
 
   gstelement_class->request_new_pad = gst_input_selector_request_new_pad;
   gstelement_class->release_pad = gst_input_selector_release_pad;

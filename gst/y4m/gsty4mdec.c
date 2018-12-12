@@ -18,15 +18,15 @@
  */
 /**
  * SECTION:element-gsty4mdec
+ * @title: gsty4mdec
  *
  * The gsty4mdec element decodes uncompressed video in YUV4MPEG format.
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 -v filesrc location=file.y4m ! y4mdec ! xvimagesink
  * ]|
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -106,10 +106,10 @@ gst_y4m_dec_class_init (GstY4mDecClass * klass)
 
   element_class->change_state = GST_DEBUG_FUNCPTR (gst_y4m_dec_change_state);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_y4m_dec_src_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_y4m_dec_sink_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_y4m_dec_src_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_y4m_dec_sink_template);
 
   gst_element_class_set_static_metadata (element_class,
       "YUV4MPEG demuxer/decoder", "Codec/Demuxer",

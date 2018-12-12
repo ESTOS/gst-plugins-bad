@@ -45,7 +45,8 @@
  */
 
 /**
- * SECTION:gst-plugin-bad-plugins-srtpenc
+ * SECTION:element-srtpenc
+ * @title: srtpenc
  * @see_also: srtpdec
  *
  * gstrtpenc acts as an encoder that adds security to RTP and RTCP
@@ -101,21 +102,12 @@
  * while to other clients.
  */
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
+#include "gstsrtpenc.h"
 
-#include <gst/gst.h>
 #include <gst/rtp/gstrtpbuffer.h>
 #include <gst/rtp/gstrtcpbuffer.h>
 #include <string.h>
-
-#include "gstsrtpenc.h"
-
-#include "gstsrtp.h"
-#include "gstsrtp-enumtypes.h"
-
-#include <srtp/srtp_priv.h>
+#include <stdio.h>
 
 GST_DEBUG_CATEGORY_STATIC (gst_srtp_enc_debug);
 #define GST_CAT_DEFAULT gst_srtp_enc_debug
@@ -159,7 +151,8 @@ enum
   PROP_RTCP_AUTH,
   PROP_RANDOM_KEY,
   PROP_REPLAY_WINDOW_SIZE,
-  PROP_ALLOW_REPEAT_TX
+  PROP_ALLOW_REPEAT_TX,
+  PROP_STATS
 };
 
 typedef struct ProcessBufferItData
@@ -246,27 +239,6 @@ static GstPad *gst_srtp_enc_request_new_pad (GstElement * element,
 static void gst_srtp_enc_release_pad (GstElement * element, GstPad * pad);
 
 
-static guint32
-gst_srtp_enc_get_rollover_counter (GstSrtpEnc * filter, guint32 ssrc)
-{
-  guint32 roc = 0;
-  srtp_stream_t stream;
-
-  GST_OBJECT_LOCK (filter);
-
-  GST_DEBUG_OBJECT (filter, "retrieving SRTP Rollover Counter, ssrc: %u", ssrc);
-
-  if (filter->session) {
-    stream = srtp_get_stream (filter->session, htonl (ssrc));
-    if (stream)
-      roc = stream->rtp_rdbx.index >> 16;
-  }
-
-  GST_OBJECT_UNLOCK (filter);
-
-  return roc;
-}
-
 /* initialize the srtpenc's class
  */
 static void
@@ -278,14 +250,14 @@ gst_srtp_enc_class_init (GstSrtpEncClass * klass)
   gobject_class = (GObjectClass *) klass;
   gstelement_class = (GstElementClass *) klass;
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&rtp_src_template));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&rtp_sink_template));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&rtcp_src_template));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&rtcp_sink_template));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &rtp_src_template);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &rtp_sink_template);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &rtcp_src_template);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &rtcp_sink_template);
 
   gst_element_class_set_static_metadata (gstelement_class, "SRTP encoder",
       "Filter/Network/SRTP",
@@ -342,6 +314,9 @@ gst_srtp_enc_class_init (GstSrtpEncClass * klass)
           "(Note that such repeated transmissions must have the same RTP payload, "
           "or a severe security weakness is introduced!)",
           DEFAULT_ALLOW_REPEAT_TX, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_STATS,
+      g_param_spec_boxed ("stats", "Statistics", "Various statistics",
+          GST_TYPE_STRUCTURE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
 
   /**
    * GstSrtpEnc::soft-limit:
@@ -354,22 +329,6 @@ gst_srtp_enc_class_init (GstSrtpEncClass * klass)
   gst_srtp_enc_signals[SIGNAL_SOFT_LIMIT] =
       g_signal_new ("soft-limit", G_TYPE_FROM_CLASS (klass),
       G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL, G_TYPE_NONE, 0);
-
-  /**
-   * GstSrtpEnc::get-rollover-counter:
-   * @gstsrtpenc: the element on which the signal is emitted
-   * @ssrc: The unique SSRC of the stream
-   *
-   * Request the SRTP rollover counter for the stream with @ssrc.
-   */
-  gst_srtp_enc_signals[SIGNAL_GET_ROLLOVER_COUNTER] =
-      g_signal_new ("get-rollover-counter", G_TYPE_FROM_CLASS (klass),
-      G_SIGNAL_RUN_LAST | G_SIGNAL_ACTION, G_STRUCT_OFFSET (GstSrtpEncClass,
-          get_rollover_counter), NULL, NULL, g_cclosure_marshal_generic,
-      G_TYPE_UINT, 1, G_TYPE_UINT);
-
-  klass->get_rollover_counter =
-      GST_DEBUG_FUNCPTR (gst_srtp_enc_get_rollover_counter);
 }
 
 
@@ -387,6 +346,7 @@ gst_srtp_enc_init (GstSrtpEnc * filter)
   filter->rtcp_auth = DEFAULT_RTCP_AUTH;
   filter->replay_window_size = DEFAULT_REPLAY_WINDOW_SIZE;
   filter->allow_repeat_tx = DEFAULT_ALLOW_REPEAT_TX;
+  filter->ssrcs_set = g_hash_table_new (g_direct_hash, g_direct_equal);
 }
 
 static guint
@@ -404,10 +364,10 @@ max_cipher_key_size (GstSrtpEnc * filter)
  *
  * Should be called with the filter locked
  */
-static err_status_t
+static srtp_err_status_t
 gst_srtp_enc_create_session (GstSrtpEnc * filter)
 {
-  err_status_t ret;
+  srtp_err_status_t ret;
   srtp_policy_t policy;
   GstMapInfo map;
   guchar tmp[1];
@@ -419,21 +379,25 @@ gst_srtp_enc_create_session (GstSrtpEnc * filter)
     gsize keysize;
 
     if (filter->key == NULL) {
+      GST_OBJECT_UNLOCK (filter);
       GST_ELEMENT_ERROR (filter, LIBRARY, SETTINGS,
           ("Cipher is not NULL, key must be set"),
           ("Cipher is not NULL, key must be set"));
-      return err_status_fail;
+      GST_OBJECT_LOCK (filter);
+      return srtp_err_status_fail;
     }
 
     expected = max_cipher_key_size (filter);
     keysize = gst_buffer_get_size (filter->key);
 
     if (expected != keysize) {
+      GST_OBJECT_UNLOCK (filter);
       GST_ELEMENT_ERROR (filter, LIBRARY, SETTINGS,
           ("Master key size is wrong"),
           ("Expected master key of %d bytes, but received %" G_GSIZE_FORMAT
               " bytes", expected, keysize));
-      return err_status_fail;
+      GST_OBJECT_LOCK (filter);
+      return srtp_err_status_fail;
     }
   }
 
@@ -475,8 +439,12 @@ gst_srtp_enc_create_session (GstSrtpEnc * filter)
 static void
 gst_srtp_enc_reset_no_lock (GstSrtpEnc * filter)
 {
-  if (!filter->first_session)
+  if (!filter->first_session) {
     srtp_dealloc (filter->session);
+    filter->session = NULL;
+
+    g_hash_table_remove_all (filter->ssrcs_set);
+  }
 
   filter->first_session = TRUE;
   filter->key_changed = FALSE;
@@ -630,7 +598,53 @@ gst_srtp_enc_dispose (GObject * object)
     gst_buffer_unref (filter->key);
   filter->key = NULL;
 
+  if (filter->ssrcs_set)
+    g_hash_table_unref (filter->ssrcs_set);
+  filter->ssrcs_set = NULL;
+
   G_OBJECT_CLASS (gst_srtp_enc_parent_class)->dispose (object);
+}
+
+static GstStructure *
+gst_srtp_enc_create_stats (GstSrtpEnc * filter)
+{
+  GstStructure *s;
+  GValue va = G_VALUE_INIT;
+  GValue v = G_VALUE_INIT;
+
+  s = gst_structure_new_empty ("application/x-srtp-encoder-stats");
+
+  g_value_init (&va, GST_TYPE_ARRAY);
+  g_value_init (&v, GST_TYPE_STRUCTURE);
+
+  if (filter->session) {
+    GHashTableIter iter;
+    gpointer key;
+
+    g_hash_table_iter_init (&iter, filter->ssrcs_set);
+    while (g_hash_table_iter_next (&iter, &key, NULL)) {
+      GstStructure *ss;
+      guint32 ssrc = GPOINTER_TO_UINT (key);
+      srtp_err_status_t status;
+      guint32 roc;
+
+      status = srtp_get_stream_roc (filter->session, ssrc, &roc);
+      if (status != srtp_err_status_ok) {
+        continue;
+      }
+
+      ss = gst_structure_new ("application/x-srtp-stream",
+          "ssrc", G_TYPE_UINT, ssrc, "roc", G_TYPE_UINT, roc, NULL);
+
+      g_value_take_boxed (&v, ss);
+      gst_value_array_append_value (&va, &v);
+    }
+  }
+
+  gst_structure_take_value (s, "streams", &va);
+  g_value_unset (&v);
+
+  return s;
 }
 
 static void
@@ -724,6 +738,9 @@ gst_srtp_enc_get_property (GObject * object, guint prop_id,
     case PROP_ALLOW_REPEAT_TX:
       g_value_set_boolean (value, filter->allow_repeat_tx);
       break;
+    case PROP_STATS:
+      g_value_take_boxed (value, gst_srtp_enc_create_stats (filter));
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -788,6 +805,12 @@ gst_srtp_enc_sink_setcaps (GstPad * pad, GstSrtpEnc * filter,
     gst_structure_set_name (ps, "application/x-srtp");
 
   GST_OBJECT_LOCK (filter);
+
+  if (gst_structure_has_field_typed (ps, "ssrc", G_TYPE_UINT)) {
+    guint ssrc;
+    gst_structure_get_uint (ps, "ssrc", &ssrc);
+    g_hash_table_add (filter->ssrcs_set, GUINT_TO_POINTER (ssrc));
+  }
 
   if (HAS_CRYPTO (filter))
     gst_structure_set (ps, "srtp-key", GST_TYPE_BUFFER, filter->key, NULL);
@@ -978,9 +1001,9 @@ gst_srtp_enc_check_set_caps (GstSrtpEnc * filter, GstPad * pad,
   }
 
   if (filter->first_session) {
-    err_status_t status = gst_srtp_enc_create_session (filter);
+    srtp_err_status_t status = gst_srtp_enc_create_session (filter);
 
-    if (status != err_status_ok) {
+    if (status != srtp_err_status_ok) {
       GST_OBJECT_UNLOCK (filter);
       GST_ELEMENT_ERROR (filter, LIBRARY, INIT,
           ("Could not initialize SRTP encoder"),
@@ -1013,7 +1036,7 @@ gst_srtp_enc_process_buffer (GstSrtpEnc * filter, GstPad * pad,
   gint size_max, size;
   GstBuffer *bufout = NULL;
   GstMapInfo mapout;
-  err_status_t err;
+  srtp_err_status_t err;
 
   /* Create a bigger buffer to add protection */
   size = gst_buffer_get_size (buf);
@@ -1037,7 +1060,7 @@ gst_srtp_enc_process_buffer (GstSrtpEnc * filter, GstPad * pad,
 
   gst_buffer_unmap (bufout, &mapout);
 
-  if (err == err_status_ok) {
+  if (err == srtp_err_status_ok) {
     /* Buffer protected */
     gst_buffer_set_size (bufout, size);
     gst_buffer_copy_into (bufout, buf, GST_BUFFER_COPY_METADATA, 0, -1);
@@ -1045,7 +1068,7 @@ gst_srtp_enc_process_buffer (GstSrtpEnc * filter, GstPad * pad,
     GST_LOG_OBJECT (pad, "Encoding %s buffer of size %d",
         is_rtcp ? "RTCP" : "RTP", size);
 
-  } else if (err == err_status_key_expired) {
+  } else if (err == srtp_err_status_key_expired) {
 
     GST_ELEMENT_ERROR (GST_ELEMENT_CAST (filter), STREAM, ENCODE,
         ("Key usage limit has been reached"),
@@ -1266,8 +1289,8 @@ gst_srtp_enc_change_state (GstElement * element, GstStateChange transition)
           }
         }
       }
-      if ((filter->rtcp_cipher != NULL_CIPHER)
-          && (filter->rtcp_auth == NULL_AUTH)) {
+      if ((filter->rtcp_cipher != SRTP_NULL_CIPHER)
+          && (filter->rtcp_auth == SRTP_NULL_AUTH)) {
         GST_ERROR_OBJECT (filter,
             "RTCP authentication can't be NULL if encryption is not NULL.");
         return GST_STATE_CHANGE_FAILURE;

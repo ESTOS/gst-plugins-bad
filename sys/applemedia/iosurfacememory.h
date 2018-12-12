@@ -26,6 +26,7 @@
 #include <gst/gstallocator.h>
 #include <gst/video/video.h>
 #include <gst/gl/gl.h>
+#include <gst/gl/gstglfuncs.h>
 
 G_BEGIN_DECLS
 
@@ -53,6 +54,7 @@ GstIOSurfaceMemory *
 gst_io_surface_memory_wrapped (GstGLContext * context,
     IOSurfaceRef surface,
     GstGLTextureTarget target,
+    GstGLFormat tex_format,
     GstVideoInfo * info,
     guint plane,
     GstVideoAlignment *valign,

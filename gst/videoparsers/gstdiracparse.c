@@ -18,16 +18,16 @@
  */
 /**
  * SECTION:element-gstdiracparse
+ * @title: gstdiracparse
  *
  * The gstdiracparse element does FIXME stuff.
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 -v fakesrc ! gstdiracparse ! FIXME ! fakesink
  * ]|
  * FIXME Describe what the pipeline does.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -109,10 +109,10 @@ gst_dirac_parse_class_init (GstDiracParseClass * klass)
   gobject_class->dispose = gst_dirac_parse_dispose;
   gobject_class->finalize = gst_dirac_parse_finalize;
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_dirac_parse_src_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_dirac_parse_sink_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_dirac_parse_src_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_dirac_parse_sink_template);
 
   gst_element_class_set_static_metadata (element_class, "Dirac parser",
       "Codec/Parser/Video", "Parses Dirac streams",

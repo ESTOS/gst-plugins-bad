@@ -19,13 +19,13 @@
  */
 /**
  * SECTION:element-gstivtc
+ * @title: gstivtc
  *
  * The ivtc element is an inverse telecine filter.  It takes interlaced
  * video that was created from progressive content using a telecine
  * filter, and reconstructs the original progressive content.
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 -v videotestsrc pattern=ball ! video/x-raw,framerate=24/1 !
  *     interlace !
@@ -36,7 +36,7 @@
  * converts it to a 60 fields per second interlaced stream.  Then the
  * stream is inversed telecine'd back to 24 fps, yielding approximately
  * the original videotestsrc content.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -119,10 +119,10 @@ gst_ivtc_class_init (GstIvtcClass * klass)
 
   /* Setting up pads and setting metadata should be moved to
      base_class_init if you intend to subclass this class. */
-  gst_element_class_add_pad_template (GST_ELEMENT_CLASS (klass),
-      gst_static_pad_template_get (&gst_ivtc_sink_template));
-  gst_element_class_add_pad_template (GST_ELEMENT_CLASS (klass),
-      gst_static_pad_template_get (&gst_ivtc_src_template));
+  gst_element_class_add_static_pad_template (GST_ELEMENT_CLASS (klass),
+      &gst_ivtc_sink_template);
+  gst_element_class_add_static_pad_template (GST_ELEMENT_CLASS (klass),
+      &gst_ivtc_src_template);
 
   gst_element_class_set_static_metadata (GST_ELEMENT_CLASS (klass),
       "Inverse Telecine", "Video/Filter", "Inverse Telecine Filter",

@@ -122,10 +122,8 @@ gst_openexr_dec_class_init (GstOpenEXRDecClass * klass)
   element_class = (GstElementClass *) klass;
   video_decoder_class = (GstVideoDecoderClass *) klass;
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_openexr_dec_src_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_openexr_dec_sink_template));
+  gst_element_class_add_static_pad_template (element_class, &gst_openexr_dec_src_template);
+  gst_element_class_add_static_pad_template (element_class, &gst_openexr_dec_sink_template);
 
   gst_element_class_set_static_metadata (element_class,
       "OpenEXR decoder",
@@ -344,7 +342,7 @@ gst_openexr_dec_handle_frame (GstVideoDecoder * decoder,
         MemIStream (gst_pad_get_stream_id (GST_VIDEO_DECODER_SINK_PAD
             (decoder)), map.data, map.size);
   }
-  catch (Iex::BaseExc e) {
+  catch (Iex::BaseExc& e) {
     gst_video_codec_frame_unref (frame);
 
     GST_ELEMENT_ERROR (self, CORE, FAILED,
@@ -354,7 +352,7 @@ gst_openexr_dec_handle_frame (GstVideoDecoder * decoder,
   try {
     file = new RgbaInputFile (*istr);
   }
-  catch (Iex::BaseExc e) {
+  catch (Iex::BaseExc& e) {
     delete istr;
     gst_video_codec_frame_unref (frame);
 
@@ -408,7 +406,7 @@ gst_openexr_dec_handle_frame (GstVideoDecoder * decoder,
   try {
     file->setFrameBuffer (fb - dw.min.x - dw.min.y * width, 1, width);
     file->readPixels (dw.min.y, dw.max.y);
-  } catch (Iex::BaseExc e) {
+  } catch (Iex::BaseExc& e) {
     delete[](fb);
     delete file;
     delete istr;

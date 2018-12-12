@@ -30,6 +30,7 @@
 #endif
 
 #include "gstahcsrc.h"
+#include "gstahssrc.h"
 
 #include "gstamc.h"
 #include "gstamc-constants.h"
@@ -49,7 +50,7 @@ GST_DEBUG_CATEGORY (gst_amc_debug);
 
 GQuark gst_amc_codec_info_quark = 0;
 
-static GList *codec_infos = NULL;
+static GQueue codec_infos = G_QUEUE_INIT;
 #ifdef GST_AMC_IGNORE_UNKNOWN_COLOR_FORMATS
 static gboolean ignore_unknown_color_formats = TRUE;
 #else
@@ -1398,7 +1399,7 @@ scan_codecs (GstPlugin * plugin)
         }
       }
 
-      codec_infos = g_list_append (codec_infos, gst_codec_info);
+      g_queue_push_tail (&codec_infos, gst_codec_info);
     }
 
     return TRUE;
@@ -1851,9 +1852,42 @@ scan_codecs (GstPlugin * plugin)
 
     /* We need at least a valid supported type */
     if (valid_codec) {
-      GST_LOG ("Successfully scanned codec '%s'", name_str);
-      codec_infos = g_list_append (codec_infos, gst_codec_info);
-      gst_codec_info = NULL;
+      GList *l;
+
+      for (l = codec_infos.head; l; l = l->next) {
+        GstAmcCodecInfo *tmp = l->data;
+
+        if (strcmp (tmp->name, gst_codec_info->name) == 0
+            && ! !tmp->is_encoder == ! !gst_codec_info->is_encoder) {
+          gint m = tmp->n_supported_types, n;
+
+          GST_LOG ("Successfully scanned codec '%s', appending to existing",
+              name_str);
+
+          tmp->gl_output_only |= gst_codec_info->gl_output_only;
+          tmp->n_supported_types += gst_codec_info->n_supported_types;
+          tmp->supported_types =
+              g_realloc (tmp->supported_types,
+              tmp->n_supported_types * sizeof (GstAmcCodecType));
+
+          for (n = 0; n < gst_codec_info->n_supported_types; n++, m++) {
+            tmp->supported_types[m] = gst_codec_info->supported_types[n];
+          }
+          g_free (gst_codec_info->supported_types);
+          g_free (gst_codec_info->name);
+          g_free (gst_codec_info);
+          gst_codec_info = NULL;
+
+          break;
+        }
+      }
+
+      /* Found no existing codec with this name */
+      if (l == NULL) {
+        GST_LOG ("Successfully scanned codec '%s'", name_str);
+        g_queue_push_tail (&codec_infos, gst_codec_info);
+        gst_codec_info = NULL;
+      }
     }
 
     /* Clean up of all local references we got */
@@ -1891,7 +1925,7 @@ scan_codecs (GstPlugin * plugin)
     valid_codec = TRUE;
   }
 
-  ret = codec_infos != NULL;
+  ret = codec_infos.length != 0;
 
   /* If successful we store a cache of the codec information in
    * the registry. Otherwise we would always load all codecs during
@@ -1906,7 +1940,7 @@ scan_codecs (GstPlugin * plugin)
 
     g_value_init (&arr, GST_TYPE_ARRAY);
 
-    for (l = codec_infos; l; l = l->next) {
+    for (l = codec_infos.head; l; l = l->next) {
       GstAmcCodecInfo *gst_codec_info = l->data;
       GValue cv = { 0, };
       GstStructure *cs = gst_structure_new_empty ("gst-amc-codec");
@@ -3187,7 +3221,7 @@ register_codecs (GstPlugin * plugin)
 
   GST_DEBUG ("Registering plugins");
 
-  for (l = codec_infos; l; l = l->next) {
+  for (l = codec_infos.head; l; l = l->next) {
     GstAmcCodecInfo *codec_info = l->data;
     gboolean is_audio = FALSE;
     gboolean is_video = FALSE;
@@ -3297,17 +3331,14 @@ register_codecs (GstPlugin * plugin)
 }
 
 static gboolean
-plugin_init (GstPlugin * plugin)
+amc_init (GstPlugin * plugin)
 {
   const gchar *ignore;
 
-  GST_DEBUG_CATEGORY_INIT (gst_amc_debug, "amc", 0, "android-media-codec");
-
-  if (!gst_amc_jni_initialize ())
-    return FALSE;
-
   gst_plugin_add_dependency_simple (plugin, NULL, "/etc", "media_codecs.xml",
       GST_PLUGIN_DEPENDENCY_FLAG_NONE);
+
+  gst_amc_codec_info_quark = g_quark_from_static_string ("gst-amc-codec-info");
 
   if (!get_java_classes ())
     return FALSE;
@@ -3323,39 +3354,70 @@ plugin_init (GstPlugin * plugin)
   if (!scan_codecs (plugin))
     return FALSE;
 
-  gst_amc_codec_info_quark = g_quark_from_static_string ("gst-amc-codec-info");
-
   if (!register_codecs (plugin))
     return FALSE;
 
-  if (!gst_android_graphics_surfacetexture_init ()) {
-    GST_ERROR ("Failed to init android surface texture");
+  return TRUE;
+}
+
+static gboolean
+ahc_init (GstPlugin * plugin)
+{
+  if (!gst_android_graphics_imageformat_init ()) {
+    GST_ERROR ("Failed to init android image format");
     return FALSE;
   }
 
-  if (!gst_android_graphics_imageformat_init ()) {
-    GST_ERROR ("Failed to init android image format");
-    goto failed_surfacetexture;
-  }
-
   if (!gst_android_hardware_camera_init ()) {
-    goto failed_graphics_imageformat;
+    gst_android_graphics_imageformat_deinit ();
+    return FALSE;
   }
 
   if (!gst_element_register (plugin, "ahcsrc", GST_RANK_NONE, GST_TYPE_AHC_SRC)) {
     GST_ERROR ("Failed to register android camera source");
-    goto failed_hardware_camera;
+    gst_android_hardware_camera_deinit ();
+    gst_android_graphics_imageformat_deinit ();
+    return FALSE;
   }
 
   return TRUE;
+}
 
-failed_hardware_camera:
-  gst_android_hardware_camera_deinit ();
-failed_graphics_imageformat:
-  gst_android_graphics_imageformat_deinit ();
-failed_surfacetexture:
-  gst_android_graphics_surfacetexture_deinit ();
-  return FALSE;
+static gboolean
+ahs_init (GstPlugin * plugin)
+{
+  if (!gst_android_hardware_sensor_init ())
+    return FALSE;
+
+  if (!gst_element_register (plugin, "ahssrc", GST_RANK_NONE, GST_TYPE_AHS_SRC)) {
+    GST_ERROR ("Failed to register android sensor source");
+    gst_android_hardware_sensor_deinit ();
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
+static gboolean
+plugin_init (GstPlugin * plugin)
+{
+  gboolean init_ok = FALSE;
+
+  GST_DEBUG_CATEGORY_INIT (gst_amc_debug, "amc", 0, "android-media-codec");
+
+  if (!gst_amc_jni_initialize ())
+    return FALSE;
+
+  if (amc_init (plugin))
+    init_ok = TRUE;
+
+  if (ahc_init (plugin))
+    init_ok = TRUE;
+
+  if (ahs_init (plugin))
+    init_ok = TRUE;
+
+  return init_ok;
 }
 
 void
@@ -3474,6 +3536,11 @@ gst_amc_codec_info_to_caps (const GstAmcCodecInfo * codec_info,
               "rate", GST_TYPE_INT_RANGE, 1, G_MAXINT,
               "channels", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
           encoded_ret = gst_caps_merge_structure (encoded_ret, tmp);
+        } else if (strcmp (type->mime, "audio/opus") == 0) {
+          tmp = gst_structure_new ("audio/x-opus",
+              "rate", GST_TYPE_INT_RANGE, 1, G_MAXINT,
+              "channels", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
+          encoded_ret = gst_caps_merge_structure (encoded_ret, tmp);
         } else if (strcmp (type->mime, "audio/flac") == 0) {
           tmp = gst_structure_new ("audio/x-flac",
               "rate", GST_TYPE_INT_RANGE, 1, G_MAXINT,
@@ -3498,6 +3565,11 @@ gst_amc_codec_info_to_caps (const GstAmcCodecInfo * codec_info,
 
         for (j = 0; j < type->n_color_formats; j++) {
           GstVideoFormat format;
+
+          /* Skip here without a warning, this is special and handled
+           * in the decoder when doing rendering to a surface */
+          if (type->color_formats[j] == COLOR_FormatAndroidOpaque)
+            continue;
 
           format =
               gst_amc_color_format_to_video_format (codec_info,
@@ -3809,6 +3881,13 @@ gst_amc_codec_info_to_caps (const GstAmcCodecInfo * codec_info,
               "framerate", GST_TYPE_FRACTION_RANGE, 0, 1, G_MAXINT, 1, NULL);
 
           encoded_ret = gst_caps_merge_structure (encoded_ret, tmp);
+        } else if (strcmp (type->mime, "video/x-vnd.on2.vp9") == 0) {
+          tmp = gst_structure_new ("video/x-vp9",
+              "width", GST_TYPE_INT_RANGE, 16, 4096,
+              "height", GST_TYPE_INT_RANGE, 16, 4096,
+              "framerate", GST_TYPE_FRACTION_RANGE, 0, 1, G_MAXINT, 1, NULL);
+
+          encoded_ret = gst_caps_merge_structure (encoded_ret, tmp);
         } else if (strcmp (type->mime, "video/mpeg2") == 0) {
           tmp = gst_structure_new ("video/mpeg",
               "width", GST_TYPE_INT_RANGE, 16, 4096,
@@ -3826,6 +3905,10 @@ gst_amc_codec_info_to_caps (const GstAmcCodecInfo * codec_info,
       }
     }
   }
+
+  GST_DEBUG ("Returning caps for '%s':", codec_info->name);
+  GST_DEBUG ("  raw caps: %" GST_PTR_FORMAT, raw_ret);
+  GST_DEBUG ("  encoded caps: %" GST_PTR_FORMAT, encoded_ret);
 }
 
 GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,

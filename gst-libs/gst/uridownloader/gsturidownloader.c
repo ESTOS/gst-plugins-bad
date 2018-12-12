@@ -42,6 +42,8 @@ struct _GstUriDownloaderPrivate
   gboolean got_buffer;
   GMutex download_lock;         /* used to restrict to one download only */
 
+  GWeakRef parent;
+
   GError *err;
 
   GCond cond;
@@ -57,6 +59,10 @@ static gboolean gst_uri_downloader_sink_event (GstPad * pad, GstObject * parent,
     GstEvent * event);
 static GstBusSyncReply gst_uri_downloader_bus_handler (GstBus * bus,
     GstMessage * message, gpointer data);
+
+static gboolean gst_uri_downloader_ensure_src (GstUriDownloader * downloader,
+    const gchar * uri);
+static void gst_uri_downloader_destroy_src (GstUriDownloader * downloader);
 
 static GstStaticPadTemplate sinkpadtemplate = GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
@@ -112,11 +118,7 @@ gst_uri_downloader_dispose (GObject * object)
 {
   GstUriDownloader *downloader = GST_URI_DOWNLOADER (object);
 
-  if (downloader->priv->urisrc != NULL) {
-    gst_element_set_state (downloader->priv->urisrc, GST_STATE_NULL);
-    gst_object_unref (downloader->priv->urisrc);
-    downloader->priv->urisrc = NULL;
-  }
+  gst_uri_downloader_destroy_src (downloader);
 
   if (downloader->priv->bus != NULL) {
     gst_object_unref (downloader->priv->bus);
@@ -132,6 +134,8 @@ gst_uri_downloader_dispose (GObject * object)
     g_object_unref (downloader->priv->download);
     downloader->priv->download = NULL;
   }
+
+  g_weak_ref_clear (&downloader->priv->parent);
 
   G_OBJECT_CLASS (gst_uri_downloader_parent_class)->dispose (object);
 }
@@ -150,7 +154,28 @@ gst_uri_downloader_finalize (GObject * object)
 GstUriDownloader *
 gst_uri_downloader_new (void)
 {
-  return g_object_new (GST_TYPE_URI_DOWNLOADER, NULL);
+  GstUriDownloader *downloader;
+
+  downloader = g_object_new (GST_TYPE_URI_DOWNLOADER, NULL);
+  gst_object_ref_sink (downloader);
+
+  return downloader;
+}
+
+/**
+ * gst_uri_downloader_set_parent:
+ * @param downloader: the #GstUriDownloader
+ * @param parent: the parent #GstElement
+ *
+ * Sets an element as parent of this #GstUriDownloader so that context
+ * requests from the underlying source are proxied to the main pipeline
+ * and set back if a context was provided.
+ */
+void
+gst_uri_downloader_set_parent (GstUriDownloader * downloader,
+    GstElement * parent)
+{
+  g_weak_ref_set (&downloader->priv->parent, parent);
 }
 
 static gboolean
@@ -255,6 +280,35 @@ gst_uri_downloader_bus_handler (GstBus * bus,
     GST_DEBUG ("Debugging info: %s\n", (dbg_info) ? dbg_info : "none");
     g_error_free (err);
     g_free (dbg_info);
+  } else if (GST_MESSAGE_TYPE (message) == GST_MESSAGE_NEED_CONTEXT) {
+    GstElement *parent = g_weak_ref_get (&downloader->priv->parent);
+
+    /* post the same need-context as if it was from the parent and then
+     * get it to our internal element that requested it */
+    if (parent && GST_IS_ELEMENT (GST_MESSAGE_SRC (message))) {
+      const gchar *context_type;
+      GstContext *context;
+      GstElement *msg_src = GST_ELEMENT_CAST (GST_MESSAGE_SRC (message));
+
+      gst_message_parse_context_type (message, &context_type);
+      context = gst_element_get_context (parent, context_type);
+
+      /* No context, request one */
+      if (!context) {
+        GstMessage *need_context_msg =
+            gst_message_new_need_context (GST_OBJECT_CAST (parent),
+            context_type);
+        gst_element_post_message (parent, need_context_msg);
+        context = gst_element_get_context (parent, context_type);
+      }
+
+      if (context) {
+        gst_element_set_context (msg_src, context);
+        gst_context_unref (context);
+      }
+    }
+    if (parent)
+      gst_object_unref (parent);
   }
 
   gst_message_unref (message);
@@ -347,16 +401,8 @@ gst_uri_downloader_set_range (GstUriDownloader * downloader,
 }
 
 static gboolean
-gst_uri_downloader_set_uri (GstUriDownloader * downloader, const gchar * uri,
-    const gchar * referer, gboolean compress, gboolean refresh,
-    gboolean allow_cache)
+gst_uri_downloader_ensure_src (GstUriDownloader * downloader, const gchar * uri)
 {
-  GstPad *pad;
-  GObjectClass *gobject_class;
-
-  if (!gst_uri_is_valid (uri))
-    return FALSE;
-
   if (downloader->priv->urisrc) {
     gchar *old_protocol, *new_protocol;
     gchar *old_uri;
@@ -367,22 +413,18 @@ gst_uri_downloader_set_uri (GstUriDownloader * downloader, const gchar * uri,
     new_protocol = gst_uri_get_protocol (uri);
 
     if (!g_str_equal (old_protocol, new_protocol)) {
-      gst_element_set_state (downloader->priv->urisrc, GST_STATE_NULL);
-      gst_object_unref (downloader->priv->urisrc);
-      downloader->priv->urisrc = NULL;
+      gst_uri_downloader_destroy_src (downloader);
       GST_DEBUG_OBJECT (downloader, "Can't re-use old source element");
     } else {
       GError *err = NULL;
 
       GST_DEBUG_OBJECT (downloader, "Re-using old source element");
-      if (!gst_uri_handler_set_uri (GST_URI_HANDLER (downloader->priv->urisrc),
-              uri, &err)) {
-        GST_DEBUG_OBJECT (downloader, "Failed to re-use old source element: %s",
-            err->message);
+      if (!gst_uri_handler_set_uri
+          (GST_URI_HANDLER (downloader->priv->urisrc), uri, &err)) {
+        GST_DEBUG_OBJECT (downloader,
+            "Failed to re-use old source element: %s", err->message);
         g_clear_error (&err);
-        gst_element_set_state (downloader->priv->urisrc, GST_STATE_NULL);
-        gst_object_unref (downloader->priv->urisrc);
-        downloader->priv->urisrc = NULL;
+        gst_uri_downloader_destroy_src (downloader);
       }
     }
     g_free (old_uri);
@@ -395,9 +437,42 @@ gst_uri_downloader_set_uri (GstUriDownloader * downloader, const gchar * uri,
         uri);
     downloader->priv->urisrc =
         gst_element_make_from_uri (GST_URI_SRC, uri, NULL, NULL);
-    if (!downloader->priv->urisrc)
-      return FALSE;
+    if (downloader->priv->urisrc) {
+      /* gst_element_make_from_uri returns a floating reference
+       * and we are not going to transfer the ownership, so we
+       * should take it.
+       */
+      gst_object_ref_sink (downloader->priv->urisrc);
+    }
   }
+
+  return downloader->priv->urisrc != NULL;
+}
+
+static void
+gst_uri_downloader_destroy_src (GstUriDownloader * downloader)
+{
+  if (!downloader->priv->urisrc)
+    return;
+
+  gst_element_set_state (downloader->priv->urisrc, GST_STATE_NULL);
+  gst_object_unref (downloader->priv->urisrc);
+  downloader->priv->urisrc = NULL;
+}
+
+static gboolean
+gst_uri_downloader_set_uri (GstUriDownloader * downloader, const gchar * uri,
+    const gchar * referer, gboolean compress,
+    gboolean refresh, gboolean allow_cache)
+{
+  GstPad *pad;
+  GObjectClass *gobject_class;
+
+  if (!gst_uri_is_valid (uri))
+    return FALSE;
+
+  if (!gst_uri_downloader_ensure_src (downloader, uri))
+    return FALSE;
 
   gobject_class = G_OBJECT_GET_CLASS (downloader->priv->urisrc);
   if (g_object_class_find_property (gobject_class, "compress"))

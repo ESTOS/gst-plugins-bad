@@ -16,8 +16,7 @@ libgstmxf_la_SOURCES = \
 	mxfjpeg2000.c \
 	mxfd10.c \
 	mxfup.c \
-	mxfvc3.c \
-	mxfdms1.c
+	mxfvc3.c
 
 libgstmxf_la_CFLAGS = \
 	-I$(top_srcdir)/gst-libs \
@@ -26,14 +25,12 @@ libgstmxf_la_CFLAGS = \
 	$(GST_BASE_CFLAGS) \
 	$(GST_CFLAGS)
 libgstmxf_la_LIBADD = \
-	$(top_builddir)/gst-libs/gst/base/libgstbadbase-$(GST_API_VERSION).la \
 	$(GST_PLUGINS_BASE_LIBS) \
 	-lgstvideo-@GST_API_VERSION@ \
 	-lgstaudio-@GST_API_VERSION@ \
 	$(GST_BASE_LIBS) \
 	$(GST_LIBS)
 libgstmxf_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS)
-libgstmxf_la_LIBTOOLFLAGS = $(GST_PLUGIN_LIBTOOLFLAGS)
 
 noinst_HEADERS = \
 	mxful.h \
@@ -50,5 +47,4 @@ noinst_HEADERS = \
 	mxfjpeg2000.h \
 	mxfd10.h \
 	mxfup.h \
-	mxfvc3.h \
-	mxfdms1.h
+	mxfvc3.h

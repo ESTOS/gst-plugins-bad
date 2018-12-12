@@ -35,7 +35,7 @@
 #include <gst/base/gstadapter.h>
 #include <gst/base/gstdataqueue.h>
 #include "gstmpdparser.h"
-#include "gstisoff.h"
+#include <gst/isoff/gstisoff.h>
 #include <gst/uridownloader/gsturidownloader.h>
 
 G_BEGIN_DECLS
@@ -68,10 +68,50 @@ struct _GstDashDemuxStream
 
   /* index parsing */
   GstSidxParser sidx_parser;
-  gsize sidx_current_remaining;
-  gint sidx_index;
+  GstClockTime sidx_position;
   gint64 sidx_base_offset;
+  gboolean allow_sidx;
   GstClockTime pending_seek_ts;
+
+  GstAdapter *adapter;
+  /* current offset of the first byte in the adapter / last byte we pushed or
+   * dropped*/
+  guint64 current_offset;
+  /* index = 1, header = 2, data = 3 */
+  guint current_index_header_or_data;
+
+  /* ISOBMFF box parsing */
+  gboolean is_isobmff;
+  struct {
+    /* index = 1, header = 2, data = 3 */
+    guint32 current_fourcc;
+    guint64 current_start_offset;
+    guint64 current_size;
+  } isobmff_parser;
+
+  GstMoofBox *moof;
+  guint64 moof_offset, moof_size;
+  GArray *moof_sync_samples;
+  guint current_sync_sample;
+
+  guint64 moof_average_size;
+  guint64 keyframe_average_size;
+  guint64 keyframe_average_distance;
+  gboolean first_sync_sample_after_moof, first_sync_sample_always_after_moof;
+
+  /* Internal position value, at the keyframe/entry level */
+  GstClockTime actual_position;
+  /* Timestamp of the beginning of the current fragment */
+  GstClockTime current_fragment_timestamp;
+  GstClockTime current_fragment_duration;
+  GstClockTime current_fragment_keyframe_distance;
+
+  /* Average keyframe download time (only in trickmode-key-units) */
+  GstClockTime average_download_time;
+  /* Cached target time (only in trickmode-key-units) */
+  GstClockTime target_time;
+  /* Average skip-ahead time (only in trickmode-key-units) */
+  GstClockTime average_skip_size;
 };
 
 /**
@@ -95,12 +135,17 @@ struct _GstDashDemux
 
   /* Properties */
   GstClockTime max_buffering_time;      /* Maximum buffering time accumulated during playback */
-  guint64 max_bitrate;          /* max of bitrate supported by target decoder         */
+  guint max_bitrate;          /* max of bitrate supported by target decoder         */
+  gint max_video_width, max_video_height;
+  gint max_video_framerate_n, max_video_framerate_d;
   gchar* default_presentation_delay; /* presentation time delay if MPD@suggestedPresentationDelay is not present */
 
   gint n_audio_streams;
   gint n_video_streams;
   gint n_subtitle_streams;
+
+  gboolean trickmode_no_audio;
+  gboolean allow_trickmode_key_units;
 };
 
 struct _GstDashDemuxClass

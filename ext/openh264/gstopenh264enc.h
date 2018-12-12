@@ -33,7 +33,26 @@
 #include <gst/video/video.h>
 #include <gst/video/gstvideoencoder.h>
 
+#include <wels/codec_api.h>
+#include <wels/codec_app_def.h>
+#include <wels/codec_def.h>
+#include <wels/codec_ver.h>
+
 G_BEGIN_DECLS
+
+typedef enum _GstOpenh264encDeblockingMode
+{
+  GST_OPENH264_DEBLOCKING_ON = 0,
+  GST_OPENH264_DEBLOCKING_OFF = 1,
+  GST_OPENH264_DEBLOCKING_NOT_SLICE_BOUNDARIES = 2
+} GstOpenh264encDeblockingMode;
+
+typedef enum
+{
+  GST_OPENH264_SLICE_MODE_N_SLICES = 1,  /* SM_FIXEDSLCNUM_SLICE */
+  GST_OPENH264_SLICE_MODE_AUTO = 5       /* former SM_AUTO_SLICE */
+} GstOpenh264EncSliceMode;
+
 #define GST_TYPE_OPENH264ENC          (gst_openh264enc_get_type())
 #define GST_OPENH264ENC(obj)          (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_OPENH264ENC,GstOpenh264Enc))
 #define GST_OPENH264ENC_CLASS(klass)  (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_OPENH264ENC,GstOpenh264EncClass))
@@ -42,14 +61,38 @@ G_BEGIN_DECLS
 
 typedef struct _GstOpenh264Enc GstOpenh264Enc;
 typedef struct _GstOpenh264EncClass GstOpenh264EncClass;
-typedef struct _GstOpenh264EncPrivate GstOpenh264EncPrivate;
 
 struct _GstOpenh264Enc
 {
-    GstVideoEncoder base_openh264enc;
+  GstVideoEncoder base_openh264enc;
 
-    /*< private >*/
-    GstOpenh264EncPrivate *priv;
+  /*< private >*/
+  ISVCEncoder *encoder;
+  EUsageType usage_type;
+  guint gop_size;
+  RC_MODES rate_control;
+  guint max_slice_size;
+  guint bitrate;
+  guint max_bitrate;
+  guint qp_min;
+  guint qp_max;
+  guint framerate;
+  guint multi_thread;
+  gboolean enable_denoise;
+  gboolean enable_frame_skip;
+  GstVideoCodecState *input_state;
+  guint64 time_per_frame;
+  guint64 frame_count;
+  guint64 previous_timestamp;
+  GstOpenh264encDeblockingMode deblocking_mode;
+  gboolean background_detection;
+  gboolean adaptive_quantization;
+  gboolean scene_change_detection;
+  GstOpenh264EncSliceMode slice_mode;
+  guint num_slices;
+  ECOMPLEXITY_MODE complexity;
+  gboolean bitrate_changed;
+  gboolean max_bitrate_changed;
 };
 
 struct _GstOpenh264EncClass

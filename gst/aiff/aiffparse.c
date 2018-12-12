@@ -23,30 +23,26 @@
 
 /**
  * SECTION:element-aiffparse
+ * @title: aiffparse
  *
- * <refsect2>
- * <para>
  * Parse a .aiff file into raw or compressed audio.
- * </para>
- * <para>
+ *
  * The aiffparse element supports both push and pull mode operations, making it
  * possible to stream from a network source.
- * </para>
- * <title>Example launch line</title>
- * <para>
- * <programlisting>
+ *
+ * ## Example launch line
+ *
+ * |[
  * gst-launch-1.0 filesrc location=sine.aiff ! aiffparse ! audioconvert ! alsasink
- * </programlisting>
+ * ]|
  * Read a aiff file and output to the soundcard using the ALSA element. The
  * aiff file is assumed to contain raw uncompressed samples.
- * </para>
- * <para>
- * <programlisting>
+ *
+ * |[
  * gst-launch-1.0 souphttpsrc location=http://www.example.org/sine.aiff ! queue ! aiffparse ! audioconvert ! alsasink
- * </programlisting>
+ * ]|
  * Stream data from a network url.
- * </para>
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -59,6 +55,7 @@
 #include "aiffparse.h"
 #include <gst/audio/audio.h>
 #include <gst/tag/tag.h>
+#include <gst/pbutils/descriptions.h>
 #include <gst/gst-i18n-plugin.h>
 
 GST_DEBUG_CATEGORY (aiffparse_debug);
@@ -120,10 +117,10 @@ gst_aiff_parse_class_init (GstAiffParseClass * klass)
 
   object_class->dispose = gst_aiff_parse_dispose;
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&sink_template_factory));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&src_template_factory));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &sink_template_factory);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &src_template_factory);
 
   gst_element_class_set_static_metadata (gstelement_class,
       "AIFF audio demuxer", "Codec/Demuxer/Audio",
@@ -995,6 +992,32 @@ gst_aiff_parse_stream_headers (GstAiffParse * aiff)
         aiff->bytes_per_sample = aiff->channels * aiff->width / 8;
         aiff->bps = aiff->bytes_per_sample * aiff->rate;
 
+        if (!aiff->tags)
+          aiff->tags = gst_tag_list_new_empty ();
+
+        {
+          GstCaps *templ_caps = gst_pad_get_pad_template_caps (aiff->sinkpad);
+          gst_pb_utils_add_codec_description_to_tag_list (aiff->tags,
+              GST_TAG_CONTAINER_FORMAT, templ_caps);
+          gst_caps_unref (templ_caps);
+        }
+
+        if (aiff->bps) {
+          guint bitrate = aiff->bps * 8;
+
+          GST_DEBUG_OBJECT (aiff, "adding bitrate of %u bps to tag list",
+              bitrate);
+
+          /* At the moment, aiffparse only supports uncompressed PCM data.
+           * Therefore, nominal, actual, minimum, maximum bitrate are the same.
+           * XXX: If AIFF-C support is extended to include compression,
+           * make sure that aiff->bps is set properly. */
+          gst_tag_list_add (aiff->tags, GST_TAG_MERGE_REPLACE,
+              GST_TAG_BITRATE, bitrate, GST_TAG_NOMINAL_BITRATE, bitrate,
+              GST_TAG_MINIMUM_BITRATE, bitrate, GST_TAG_MAXIMUM_BITRATE,
+              bitrate, NULL);
+        }
+
         if (aiff->bytes_per_sample <= 0)
           goto no_bytes_per_sample;
 
@@ -1500,9 +1523,7 @@ pause:
     } else if (ret < GST_FLOW_EOS || ret == GST_FLOW_NOT_LINKED) {
       /* for fatal errors we post an error message, post the error
        * first so the app knows about the error first. */
-      GST_ELEMENT_ERROR (aiff, STREAM, FAILED,
-          (_("Internal data flow error.")),
-          ("streaming task paused, reason %s (%d)", reason, ret));
+      GST_ELEMENT_FLOW_ERROR (aiff, ret);
       gst_pad_push_event (aiff->srcpad, gst_event_new_eos ());
     }
     return;
@@ -1905,6 +1926,15 @@ gst_aiff_parse_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
         gst_event_unref (aiff->start_segment);
 
       aiff->start_segment = gst_event_new_segment (&segment);
+
+      /* If the seek is within the same SSND chunk and there is no new
+       * end_offset defined keep the previous end_offset. This will avoid noise
+       * at the end of playback if e.g. a metadata chunk is located at the end
+       * of the file. */
+      if (aiff->end_offset > 0 && offset < aiff->end_offset &&
+          offset >= aiff->datastart && end_offset == -1) {
+        end_offset = aiff->end_offset;
+      }
 
       /* stream leftover data in current segment */
       if (aiff->state == AIFF_PARSE_DATA)

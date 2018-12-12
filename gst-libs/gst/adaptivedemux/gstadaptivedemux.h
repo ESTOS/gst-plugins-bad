@@ -25,6 +25,7 @@
 #include <gst/gst.h>
 #include <gst/base/gstadapter.h>
 #include <gst/uridownloader/gsturidownloader.h>
+#include <gst/adaptivedemux/adaptive-demux-prelude.h>
 
 G_BEGIN_DECLS
 
@@ -59,6 +60,8 @@ G_BEGIN_DECLS
  */
 #define GST_ADAPTIVE_DEMUX_SINK_PAD(obj)        (((GstAdaptiveDemux *) (obj))->sinkpad)
 
+#define GST_ADAPTIVE_DEMUX_IN_TRICKMODE_KEY_UNITS(obj) ((((GstAdaptiveDemux*)(obj))->segment.flags & GST_SEGMENT_FLAG_TRICKMODE_KEY_UNITS) == GST_SEGMENT_FLAG_TRICKMODE_KEY_UNITS)
+
 #define GST_ADAPTIVE_DEMUX_STREAM_PAD(obj)      (((GstAdaptiveDemuxStream *) (obj))->pad)
 
 #define GST_ADAPTIVE_DEMUX_STREAM_NEED_HEADER(obj) (((GstAdaptiveDemuxStream *) (obj))->need_header)
@@ -81,6 +84,9 @@ G_BEGIN_DECLS
   g_clear_error (&err); \
 } G_STMT_END
 
+/* DEPRECATED */
+#define GST_ADAPTIVE_DEMUX_FLOW_END_OF_FRAGMENT GST_FLOW_CUSTOM_SUCCESS_1
+
 typedef struct _GstAdaptiveDemuxStreamFragment GstAdaptiveDemuxStreamFragment;
 typedef struct _GstAdaptiveDemuxStream GstAdaptiveDemuxStream;
 typedef struct _GstAdaptiveDemux GstAdaptiveDemux;
@@ -96,6 +102,9 @@ struct _GstAdaptiveDemuxStreamFragment
   gint64 range_start;
   gint64 range_end;
 
+  /* when chunked downloading is used, may be be updated need_another_chunk() */
+  guint chunk_size;
+
   /* when headers are needed */
   gchar *header_uri;
   gint64 header_range_start;
@@ -109,6 +118,8 @@ struct _GstAdaptiveDemuxStreamFragment
   /* Nominal bitrate as provided by
    * sub-class or calculated by base-class */
   guint bitrate;
+
+  gboolean finished;
 };
 
 struct _GstAdaptiveDemuxStream
@@ -119,8 +130,6 @@ struct _GstAdaptiveDemuxStream
   GstAdaptiveDemux *demux;
 
   GstSegment segment;
-
-  GstAdapter *adapter;
 
   GstCaps *pending_caps;
   GstEvent *pending_segment;
@@ -145,25 +154,38 @@ struct _GstAdaptiveDemuxStream
 
   /* download tooling */
   GstElement *src;
+  guint last_status_code;
   GstPad *src_srcpad;
   GstElement *uri_handler;
   GstElement *queue;
   GMutex fragment_download_lock;
   GCond fragment_download_cond;
   gboolean download_finished;   /* protected by fragment_download_lock */
-  gboolean cancelled;           /* protected by fragment_download_lock */
+  gboolean cancelled; /* protected by fragment_download_lock */
+  gboolean replaced; /* replaced in a bitrate switch (used with cancelled) */
+  gboolean src_at_ready;     /* protected by fragment_download_lock */
   gboolean starting_fragment;
   gboolean first_fragment_buffer;
   gint64 download_start_time;
-  gint64 download_chunk_start_time;
-  gint64 download_total_time;
   gint64 download_total_bytes;
   guint64 current_download_rate;
+
+  /* amount of data downloaded in current fragment (pre-queue2) */
+  guint64 fragment_bytes_downloaded;
+  /* bitrate of the previous fragment (pre-queue2) */
+  guint64 last_bitrate;
+  /* latency (request to first byte) and full download time (request to EOS)
+   * of previous fragment (pre-queue2) */
+  GstClockTime last_latency;
+  GstClockTime last_download_time;
 
   /* Average for the last fragments */
   guint64 moving_bitrate;
   guint moving_index;
   guint64 *fragment_bitrates;
+
+  /* QoS data */
+  GstClockTime qos_earliest_time;
 
   GstAdaptiveDemuxStreamFragment fragment;
 
@@ -171,6 +193,8 @@ struct _GstAdaptiveDemuxStream
 
   /* TODO check if used */
   gboolean eos;
+
+  gboolean do_block; /* TRUE if stream should block on preroll */
 };
 
 /**
@@ -183,6 +207,8 @@ struct _GstAdaptiveDemux
   /*< private >*/
   GstBin     bin;
 
+  gboolean running;
+
   gsize stream_struct_size;
 
   /*< protected >*/
@@ -191,6 +217,7 @@ struct _GstAdaptiveDemux
   GstUriDownloader *downloader;
 
   GList *streams;
+  GList *prepared_streams;
   GList *next_streams;
 
   GstSegment segment;
@@ -204,6 +231,10 @@ struct _GstAdaptiveDemux
 
   gboolean have_group_id;
   guint group_id;
+
+  /* Realtime clock */
+  GstClock *realtime_clock;
+  gint64 clock_offset; /* offset between realtime_clock and UTC (in usec) */
 
   /* < private > */
   GstAdaptiveDemuxPrivate *priv;
@@ -228,7 +259,7 @@ struct _GstAdaptiveDemuxClass
    * Parse the manifest and add the created streams using
    * gst_adaptive_demux_stream_new()
    *
-   * Returns: #TRUE if successful
+   * Returns: %TRUE if successful
    */
   gboolean      (*process_manifest) (GstAdaptiveDemux * demux, GstBuffer * manifest);
 
@@ -289,7 +320,7 @@ struct _GstAdaptiveDemuxClass
    * The demuxer should seek on all its streams to the specified position
    * in the seek event
    *
-   * Returns: #TRUE if successful
+   * Returns: %TRUE if successful
    */
   gboolean      (*seek)             (GstAdaptiveDemux * demux, GstEvent * seek);
 
@@ -302,7 +333,7 @@ struct _GstAdaptiveDemuxClass
    * this function is called to verify if there is a new period to be played
    * in sequence.
    *
-   * Returns: #TRUE if there is another period
+   * Returns: %TRUE if there is another period
    */
   gboolean      (*has_next_period)  (GstAdaptiveDemux * demux);
   /**
@@ -318,6 +349,17 @@ struct _GstAdaptiveDemuxClass
   GstFlowReturn (*stream_seek)     (GstAdaptiveDemuxStream * stream, gboolean forward, GstSeekFlags flags, GstClockTime target_ts, GstClockTime * final_ts);
   gboolean      (*stream_has_next_fragment)  (GstAdaptiveDemuxStream * stream);
   GstFlowReturn (*stream_advance_fragment) (GstAdaptiveDemuxStream * stream);
+
+  /**
+   * need_another_chunk:
+   * @stream: #GstAdaptiveDemuxStream
+   *
+   * If chunked downloading is used (chunk_size != 0) this is called once a
+   * chunk is finished to decide whether more has to be downloaded or not.
+   * May update chunk_size to a different value
+   */
+  gboolean      (*need_another_chunk) (GstAdaptiveDemuxStream * stream);
+
   /**
    * stream_update_fragment_info:
    * @stream: #GstAdaptiveDemuxStream
@@ -340,7 +382,7 @@ struct _GstAdaptiveDemuxClass
    * needs a caps change it should set the new caps using
    * gst_adaptive_demux_stream_set_caps().
    *
-   * Returns: #TRUE if the stream changed bitrate, #FALSE otherwise
+   * Returns: %TRUE if the stream changed bitrate, %FALSE otherwise
    */
   gboolean      (*stream_select_bitrate) (GstAdaptiveDemuxStream * stream, guint64 bitrate);
   /**
@@ -351,7 +393,7 @@ struct _GstAdaptiveDemuxClass
    * to download the fragment. This is useful to avoid downloading a fragment that
    * isn't available yet.
    *
-   * Returns: The waiting time in microsseconds
+   * Returns: The waiting time in microseconds
    */
   gint64        (*stream_get_fragment_waiting_time) (GstAdaptiveDemuxStream * stream);
 
@@ -364,7 +406,7 @@ struct _GstAdaptiveDemuxClass
    * of a new fragment. Can be used to reset/init internal state that is
    * needed before each fragment, like decryption engines.
    *
-   * Returns: #TRUE if successful.
+   * Returns: %TRUE if successful.
    */
   gboolean      (*start_fragment) (GstAdaptiveDemux * demux, GstAdaptiveDemuxStream * stream);
   /**
@@ -381,13 +423,14 @@ struct _GstAdaptiveDemuxClass
    * data_received:
    * @demux: #GstAdaptiveDemux
    * @stream: #GstAdaptiveDemuxStream
+   * @buffer: #GstBuffer
    *
    * Notifies the subclass that a fragment chunk was downloaded. The subclass
-   * can look at the data at the adapter and modify/push data as desired.
+   * can look at the data and modify/push data as desired.
    *
    * Returns: #GST_FLOW_OK if successful, #GST_FLOW_ERROR in case of error.
    */
-  GstFlowReturn (*data_received) (GstAdaptiveDemux * demux, GstAdaptiveDemuxStream * stream);
+  GstFlowReturn (*data_received) (GstAdaptiveDemux * demux, GstAdaptiveDemuxStream * stream, GstBuffer * buffer);
 
   /**
    * get_live_seek_range:
@@ -425,30 +468,66 @@ struct _GstAdaptiveDemuxClass
    * selected period.
    */
   GstClockTime (*get_period_start_time) (GstAdaptiveDemux *demux);
+
+  /**
+   * requires_periodical_playlist_update:
+   * @demux: #GstAdaptiveDemux
+   *
+   * Some adaptive streaming protocols allow the client to download
+   * the playlist once and build up the fragment list based on the
+   * current fragment metadata. For those protocols the demuxer
+   * doesn't need to periodically refresh the playlist. This vfunc
+   * is relevant only for live playback scenarios.
+   *
+   * Return: %TRUE if the playlist needs to be refreshed periodically by the demuxer.
+   */
+  gboolean (*requires_periodical_playlist_update) (GstAdaptiveDemux * demux);
 };
 
+GST_ADAPTIVE_DEMUX_API
 GType    gst_adaptive_demux_get_type (void);
 
+GST_ADAPTIVE_DEMUX_API
 void     gst_adaptive_demux_set_stream_struct_size (GstAdaptiveDemux * demux,
                                                     gsize struct_size);
 
 
+GST_ADAPTIVE_DEMUX_API
 GstAdaptiveDemuxStream *gst_adaptive_demux_stream_new (GstAdaptiveDemux * demux,
                                                        GstPad * pad);
+
+GST_ADAPTIVE_DEMUX_API
 GstAdaptiveDemuxStream *gst_adaptive_demux_find_stream_for_pad (GstAdaptiveDemux * demux,
                                                                 GstPad * pad);
+
+GST_ADAPTIVE_DEMUX_API
 void gst_adaptive_demux_stream_set_caps (GstAdaptiveDemuxStream * stream,
                                          GstCaps * caps);
+
+GST_ADAPTIVE_DEMUX_API
 void gst_adaptive_demux_stream_set_tags (GstAdaptiveDemuxStream * stream,
                                          GstTagList * tags);
+
+GST_ADAPTIVE_DEMUX_API
 void gst_adaptive_demux_stream_fragment_clear (GstAdaptiveDemuxStreamFragment * f);
 
+GST_ADAPTIVE_DEMUX_API
 GstFlowReturn gst_adaptive_demux_stream_push_buffer (GstAdaptiveDemuxStream * stream, GstBuffer * buffer);
+
+GST_ADAPTIVE_DEMUX_API
 GstFlowReturn
 gst_adaptive_demux_stream_advance_fragment (GstAdaptiveDemux * demux,
     GstAdaptiveDemuxStream * stream, GstClockTime duration);
+
+GST_ADAPTIVE_DEMUX_API
 void gst_adaptive_demux_stream_queue_event (GstAdaptiveDemuxStream * stream,
     GstEvent * event);
+
+GST_ADAPTIVE_DEMUX_API
+GstClockTime gst_adaptive_demux_get_monotonic_time (GstAdaptiveDemux * demux);
+
+GST_ADAPTIVE_DEMUX_API
+GDateTime *gst_adaptive_demux_get_client_now_utc (GstAdaptiveDemux * demux);
 
 G_END_DECLS
 

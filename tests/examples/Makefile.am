@@ -18,11 +18,7 @@ endif
 
 OPENCV_EXAMPLES=opencv
 
-if USE_OPENGL
-GL_DIR=gl
-else
-GL_DIR=
-endif
+MATRIXMIX_DIR=audiomixmatrix
 
 if HAVE_AVFOUNDATION
 if HAVE_IOS
@@ -34,14 +30,8 @@ else
 AVSAMPLE_DIR=
 endif
 
-if USE_GTK3
-GTK3_DIR=gtk
-else
-GTK3_DIR=
-endif
-
 if USE_WAYLAND
-if HAVE_GTK3
+if HAVE_GTK3_WAYLAND
 WAYLAND_DIR=waylandsink
 else
 WAYLAND_DIR=
@@ -50,15 +40,28 @@ else
 WAYLAND_DIR=
 endif
 
+if USE_IPCPIPELINE
+IPCPIPELINE_DIR=ipcpipeline
+else
+IPCPIPELINE_DIR=
+endif
+
+if USE_WEBRTC
+WEBRTC_DIR=webrtc
+else
+WEBRTC_DIR=
+endif
+
 noinst_PROGRAMS = playout
 
 playout_SOURCES = playout.c
 playout_CFLAGS = $(GST_PLUGINS_BASE_CFLAGS) $(GST_CFLAGS)
 playout_LDADD = $(GST_PLUGINS_BASE_LIBS) -lgstvideo-$(GST_API_VERSION) $(GST_LIBS)
 
-SUBDIRS= codecparsers mpegts $(DIRECTFB_DIR) $(GTK_EXAMPLES) $(OPENCV_EXAMPLES) \
-        $(GL_DIR) $(GTK3_DIR) $(AVSAMPLE_DIR) $(WAYLAND_DIR)
-DIST_SUBDIRS= codecparsers mpegts camerabin2 directfb mxf opencv uvch264 gl gtk \
-        avsamplesink waylandsink
+SUBDIRS= codecparsers compositor mpegts $(DIRECTFB_DIR) $(GTK_EXAMPLES) $(OPENCV_EXAMPLES) \
+        $(AVSAMPLE_DIR) $(WAYLAND_DIR) $(MATRIXMIX_DIR) \
+        $(IPCPIPELINE_DIR) $(WEBRTC_DIR)
+DIST_SUBDIRS= codecparsers compositor mpegts camerabin2 directfb mxf opencv uvch264 \
+        avsamplesink waylandsink audiomixmatrix ipcpipeline webrtc
 
 include $(top_srcdir)/common/parallel-subdirs.mak

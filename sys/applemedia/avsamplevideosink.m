@@ -106,8 +106,7 @@ gst_av_sample_video_sink_class_init (GstAVSampleVideoSinkClass * klass)
       "Sink/Video", "A videosink based on AVSampleBuffer's",
       "Matthew Waters <matthew@centricular.com>");
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_av_sample_video_sink_template));
+  gst_element_class_add_static_pad_template (element_class, &gst_av_sample_video_sink_template);
 
   gobject_class->finalize = gst_av_sample_video_sink_finalize;
 
@@ -157,11 +156,11 @@ static void
 gst_av_sample_video_sink_finalize (GObject * object)
 {
   GstAVSampleVideoSink *av_sink = GST_AV_SAMPLE_VIDEO_SINK (object);
-  __block AVSampleBufferDisplayLayer *layer = av_sink->layer;
+  __block gpointer layer = av_sink->layer;
 
   if (layer) {
     dispatch_async (dispatch_get_main_queue (), ^{
-      [layer release];
+      CFBridgingRelease(layer);
     });
   }
 
@@ -199,19 +198,21 @@ gst_av_sample_video_sink_start (GstBaseSink * bsink)
   GstAVSampleVideoSink *av_sink = GST_AV_SAMPLE_VIDEO_SINK (bsink);
 
   if ([NSThread isMainThread]) {
-    av_sink->layer = [[AVSampleBufferDisplayLayer alloc] init];
+      AVSampleBufferDisplayLayer *layer = [[AVSampleBufferDisplayLayer alloc] init];
+    av_sink->layer = (__bridge_retained gpointer)layer;
     if (av_sink->keep_aspect_ratio)
-      av_sink->layer.videoGravity = AVLayerVideoGravityResizeAspect;
+      layer.videoGravity = AVLayerVideoGravityResizeAspect;
     else
-      av_sink->layer.videoGravity = AVLayerVideoGravityResize;
+      layer.videoGravity = AVLayerVideoGravityResize;
     g_object_notify (G_OBJECT (av_sink), "layer");
   } else {
     dispatch_sync (dispatch_get_main_queue (), ^{
-      av_sink->layer = [[AVSampleBufferDisplayLayer alloc] init];
+      AVSampleBufferDisplayLayer *layer = [[AVSampleBufferDisplayLayer alloc] init];
+      av_sink->layer = (__bridge_retained gpointer)layer;
       if (av_sink->keep_aspect_ratio)
-        av_sink->layer.videoGravity = AVLayerVideoGravityResizeAspect;
+        layer.videoGravity = AVLayerVideoGravityResizeAspect;
       else
-        av_sink->layer.videoGravity = AVLayerVideoGravityResize;
+        layer.videoGravity = AVLayerVideoGravityResize;
       g_object_notify (G_OBJECT (av_sink), "layer");
     });
   }
@@ -225,7 +226,7 @@ _stop_requesting_data (GstAVSampleVideoSink * av_sink)
 {
   if (av_sink->layer) {
     if (av_sink->layer_requesting_data)
-      [av_sink->layer stopRequestingMediaData];
+      [GST_AV_SAMPLE_VIDEO_SINK_LAYER(av_sink) stopRequestingMediaData];
     av_sink->layer_requesting_data = FALSE;
   }
 }
@@ -244,7 +245,7 @@ gst_av_sample_video_sink_stop (GstBaseSink * bsink)
     g_mutex_lock (&av_sink->render_lock);
     _stop_requesting_data (av_sink);
     g_mutex_unlock (&av_sink->render_lock);
-    [av_sink->layer flushAndRemoveImage];
+    [GST_AV_SAMPLE_VIDEO_SINK_LAYER(av_sink) flushAndRemoveImage];
   }
 
   return TRUE;
@@ -662,11 +663,12 @@ _enqueue_sample (GstAVSampleVideoSink * av_sink, GstBuffer *buf)
         kCFBooleanTrue);
   }
 
+  AVSampleBufferDisplayLayer *layer = GST_AV_SAMPLE_VIDEO_SINK_LAYER(av_sink);
   if (av_sink->keep_aspect_ratio)
-    av_sink->layer.videoGravity = AVLayerVideoGravityResizeAspect;
+    layer.videoGravity = AVLayerVideoGravityResizeAspect;
   else
-    av_sink->layer.videoGravity = AVLayerVideoGravityResize;
-  [av_sink->layer enqueueSampleBuffer:sample_buf];
+    layer.videoGravity = AVLayerVideoGravityResize;
+  [layer enqueueSampleBuffer:sample_buf];
 
   CFRelease (pbuf);
   CFRelease (sample_buf);
@@ -679,13 +681,14 @@ _request_data (GstAVSampleVideoSink * av_sink)
 {
   av_sink->layer_requesting_data = TRUE;
 
-  [av_sink->layer requestMediaDataWhenReadyOnQueue:
+  AVSampleBufferDisplayLayer *layer = GST_AV_SAMPLE_VIDEO_SINK_LAYER(av_sink);
+  [layer requestMediaDataWhenReadyOnQueue:
         dispatch_get_global_queue (DISPATCH_QUEUE_PRIORITY_DEFAULT, 0)
         usingBlock:^{
     while (TRUE) {
       /* don't needlessly fill up avsamplebufferdisplaylayer's queue.
        * This also allows us to skip displaying late frames */
-      if (!av_sink->layer.readyForMoreMediaData)
+      if (!layer.readyForMoreMediaData)
         break;
 
       g_mutex_lock (&av_sink->render_lock);
@@ -749,10 +752,14 @@ gst_av_sample_video_sink_show_frame (GstVideoSink * vsink, GstBuffer * buf)
     _request_data (av_sink);
   g_mutex_unlock (&av_sink->render_lock);
 
-#if defined(MAC_OS_X_VERSION_MAX_ALLOWED) && MAC_OS_X_VERSION_MAX_ALLOWED >= 1010
-  if ([av_sink->layer status] == AVQueuedSampleBufferRenderingStatusFailed) {
+#if defined(MAC_OS_X_VERSION_MAX_ALLOWED) && \
+    MAC_OS_X_VERSION_MAX_ALLOWED >= 1010 && \
+    defined(MAC_OS_X_VERSION_MIN_REQUIRED) && \
+    MAC_OS_X_VERSION_MIN_REQUIRED <= MAC_OS_X_VERSION_10_4
+    AVSampleBufferDisplayLayer *layer = GST_AV_SAMPLE_VIDEO_SINK_LAYER(av_sink);
+  if ([layer status] == AVQueuedSampleBufferRenderingStatusFailed) {
     GST_ERROR_OBJECT (av_sink, "failed to enqueue buffer on layer, %s",
-        [[[av_sink->layer error] description] UTF8String]);
+        [[[layer error] description] UTF8String]);
     return GST_FLOW_ERROR;
   }
 #endif
@@ -775,6 +782,7 @@ gst_av_sample_video_sink_propose_allocation (GstBaseSink * bsink, GstQuery * que
   if (caps == NULL)
     goto no_caps;
 
+  /* FIXME re-using buffer pool breaks renegotiation */
   if ((pool = av_sink->pool))
     gst_object_ref (pool);
 
@@ -793,19 +801,19 @@ gst_av_sample_video_sink_propose_allocation (GstBaseSink * bsink, GstQuery * que
       pool = NULL;
     }
     gst_structure_free (config);
-  }
-
-  if (pool == NULL && need_pool) {
+  } else {
     GstVideoInfo info;
 
     if (!gst_video_info_from_caps (&info, caps))
       goto invalid_caps;
 
-    GST_DEBUG_OBJECT (av_sink, "create new pool");
-    pool = gst_video_buffer_pool_new ();
-
     /* the normal size of a frame */
     size = info.size;
+  }
+
+  if (pool == NULL && need_pool) {
+    GST_DEBUG_OBJECT (av_sink, "create new pool");
+    pool = gst_video_buffer_pool_new ();
 
     config = gst_buffer_pool_get_config (pool);
     gst_buffer_pool_config_set_params (config, caps, size, 0, 0);
@@ -813,10 +821,9 @@ gst_av_sample_video_sink_propose_allocation (GstBaseSink * bsink, GstQuery * que
       goto config_failed;
   }
   /* we need at least 2 buffer because we hold on to the last one */
-  if (pool) {
-    gst_query_add_allocation_pool (query, pool, size, 2, 0);
+  gst_query_add_allocation_pool (query, pool, size, 2, 0);
+  if (pool)
     gst_object_unref (pool);
-  }
 
   /* we also support various metadata */
   gst_query_add_allocation_meta (query, GST_VIDEO_META_API_TYPE, 0);

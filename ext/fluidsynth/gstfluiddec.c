@@ -21,19 +21,19 @@
 
 /**
  * SECTION:element-fluiddec
+ * @title: fluiddec
  * @see_also: timidity, wildmidi
  *
  * This element renders midi-events as audio streams using
  * <ulink url="http://fluidsynth.sourceforge.net//">Fluidsynth</ulink>.
  * It offers better sound quality compared to the timidity or wildmidi element.
  *
- * <refsect2>
- * <title>Example pipeline</title>
+ * ## Example pipeline
  * |[
  * gst-launch-1.0 filesrc location=song.mid ! midiparse ! fluiddec ! pulsesink
  * ]| This example pipeline will parse the midi and render to raw audio which is
  * played via pulseaudio.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -177,10 +177,8 @@ gst_fluid_dec_class_init (GstFluidDecClass * klass)
           "Synth Polyphony", "The number of simultaneous voices", 1, 65535,
           DEFAULT_SYNTH_POLYPHONY, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&src_factory));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&sink_factory));
+  gst_element_class_add_static_pad_template (gstelement_class, &src_factory);
+  gst_element_class_add_static_pad_template (gstelement_class, &sink_factory);
 
   gst_element_class_set_static_metadata (gstelement_class, "Fluidsynth",
       "Codec/Decoder/Audio",

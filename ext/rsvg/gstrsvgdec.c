@@ -19,15 +19,15 @@
  */
 /**
  * SECTION:element-rsvgdec
+ * @title: rsvgdec
  *
  * This elements renders SVG graphics.
  *
- * <refsect2>
- * <title>Example launch lines</title>
+ * ## Example launch lines
  * |[
  * gst-launch-1.0 filesrc location=image.svg ! rsvgdec ! imagefreeze ! videoconvert ! autovideosink
  * ]| render and show a svg image.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -86,10 +86,8 @@ gst_rsvg_dec_class_init (GstRsvgDecClass * klass)
       "Uses librsvg to decode SVG images",
       "Sebastian Dröge <sebastian.droege@collabora.co.uk>");
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sink_factory));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&src_factory));
+  gst_element_class_add_static_pad_template (element_class, &sink_factory);
+  gst_element_class_add_static_pad_template (element_class, &src_factory);
 
   gobject_class->finalize = gst_rsvg_dec_finalize;
   video_decoder_class->stop = GST_DEBUG_FUNCPTR (gst_rsvg_dec_stop);
@@ -320,6 +318,11 @@ gst_rsvg_dec_parse (GstVideoDecoder * decoder, GstVideoCodecFrame * frame,
     if (memcmp (data + i, "</svg>", 6) == 0) {
       completed = TRUE;
       size = i + 6;
+      break;
+    }
+    if (memcmp (data + i, "</svg:svg>", 10) == 0) {
+      completed = TRUE;
+      size = i + 10;
       break;
     }
   }

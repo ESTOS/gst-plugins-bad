@@ -19,16 +19,15 @@
 
 /**
  * SECTION:element-openslessink
+ * @title: openslessink
  * @see_also: openslessrc
  *
  * This element renders raw audio samples using the OpenSL ES API in Android OS.
  *
- * <refsect2>
- * <title>Example pipelines</title>
+ * ## Example pipelines
  * |[
  * gst-launch-1.0 -v filesrc location=music.ogg ! oggdemux ! vorbisdec ! audioconvert ! audioresample ! opeslessink
  * ]| Play an Ogg/Vorbis file.
- * </refsect2>
  *
  */
 
@@ -272,8 +271,7 @@ gst_opensles_sink_class_init (GstOpenSLESSinkClass * klass)
           GST_TYPE_OPENSLES_STREAM_TYPE, DEFAULT_STREAM_TYPE,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&sink_factory));
+  gst_element_class_add_static_pad_template (gstelement_class, &sink_factory);
 
   gst_element_class_set_static_metadata (gstelement_class, "OpenSL ES Sink",
       "Sink/Audio",

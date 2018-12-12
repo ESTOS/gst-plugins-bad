@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) <2005> Edgard Lima <edgard.lima@indt.org.br>
+ * Copyright (C) <2005> Edgard Lima <edgard.lima@gmail.com>
  * Copyright (C) <2006> Rosfran Borges <rosfran.borges@indt.org.br>
  * Copyright (C) <2006> Andre Moreira Magalhaes <andre.magalhaes@indt.org.br>
  *
@@ -203,13 +203,12 @@ gst_neonhttp_src_class_init (GstNeonhttpSrcClass * klass)
   GST_DEBUG_CATEGORY_INIT (neonhttpsrc_debug, "neonhttpsrc", 0,
       "NEON HTTP Client Source");
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&srctemplate));
+  gst_element_class_add_static_pad_template (element_class, &srctemplate);
 
   gst_element_class_set_static_metadata (element_class, "HTTP client source",
       "Source/Network",
       "Receive data as a client over the network via HTTP using NEON",
-      "Edgard Lima <edgard.lima@indt.org.br>, "
+      "Edgard Lima <edgard.lima@gmail.com>, "
       "Rosfran Borges <rosfran.borges@indt.org.br>, "
       "Andre Moreira Magalhaes <andre.magalhaes@indt.org.br>");
 }
@@ -1111,6 +1110,6 @@ plugin_init (GstPlugin * plugin)
  * so keep the name plugin_desc, or you cannot get your plug-in registered */
 GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
     GST_VERSION_MINOR,
-    neon,
+    neonhttpsrc,
     "lib neon http client src",
     plugin_init, VERSION, GST_LICENSE, GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)

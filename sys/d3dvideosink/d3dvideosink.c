@@ -54,7 +54,7 @@ static GstStaticPadTemplate sink_template = GST_STATIC_PAD_TEMPLATE ("sink",
 GST_DEBUG_CATEGORY (gst_d3dvideosink_debug);
 #define GST_CAT_DEFAULT gst_d3dvideosink_debug
 
-/** FWD DECLS **/
+/* FWD DECLS */
 /* GstXOverlay Interface */
 static void
 gst_d3dvideosink_video_overlay_interface_init (GstVideoOverlayInterface *
@@ -156,8 +156,7 @@ gst_d3dvideosink_class_init (GstD3DVideoSinkClass * klass)
       "Display data using a Direct3D video renderer",
       "David Hoyt <dhoyt@hoytsoft.org>, Roland Krikava <info@bluedigits.com>");
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&sink_template));
+  gst_element_class_add_static_pad_template (gstelement_class, &sink_template);
 
   g_rec_mutex_init (&klass->lock);
 }
@@ -177,7 +176,7 @@ gst_d3dvideosink_init (GstD3DVideoSink * sink)
   g_rec_mutex_init (&sink->lock);
 }
 
-/** GObject Functions **/
+/* GObject Functions */
 
 static void
 gst_d3dvideosink_finalize (GObject * gobject)
@@ -246,7 +245,7 @@ gst_d3dvideosink_get_property (GObject * object, guint prop_id, GValue * value,
   }
 }
 
-/** GstBaseSinkClass Functions **/
+/* GstBaseSinkClass Functions */
 
 static GstCaps *
 gst_d3dvideosink_get_caps (GstBaseSink * basesink, GstCaps * filter)
@@ -277,14 +276,11 @@ gst_d3dvideosink_set_caps (GstBaseSink * bsink, GstCaps * caps)
   gint video_par_n, video_par_d;        /* video's PAR */
   gint display_par_n = 1, display_par_d = 1;    /* display's PAR */
   guint num, den;
-  gchar *tmp = NULL;
   GstBufferPool *newpool, *oldpool;
   GstBufferPool *newfbpool, *oldfbpool;
   GstStructure *config;
 
-  GST_DEBUG_OBJECT (bsink, " ");
-
-  GST_DEBUG_OBJECT (bsink, "Caps: %s", (tmp = gst_caps_to_string (caps)));
+  GST_DEBUG_OBJECT (bsink, "Caps: %" GST_PTR_FORMAT, caps);
   sink = GST_D3DVIDEOSINK (bsink);
 
   sink_caps = d3d_supported_caps (sink);
@@ -357,9 +353,7 @@ gst_d3dvideosink_set_caps (GstBaseSink * bsink, GstCaps * caps)
   sink->width = video_width;
   sink->height = video_height;
 
-  GST_DEBUG_OBJECT (bsink, "Selected caps: %s", (tmp =
-          gst_caps_to_string (caps)));
-  g_free (tmp);
+  GST_DEBUG_OBJECT (bsink, "Selected caps: %" GST_PTR_FORMAT, caps);
 
   if (!d3d_set_render_format (sink))
     goto incompatible_caps;
@@ -413,10 +407,8 @@ incompatible_caps:
   }
 invalid_format:
   {
-    gchar *caps_txt = gst_caps_to_string (caps);
     GST_DEBUG_OBJECT (sink,
-        "Could not locate image format from caps %s", caps_txt);
-    g_free (caps_txt);
+        "Could not locate image format from caps %" GST_PTR_FORMAT, caps);
     return FALSE;
   }
 no_disp_ratio:
@@ -478,6 +470,7 @@ gst_d3dvideosink_propose_allocation (GstBaseSink * bsink, GstQuery * query)
   return TRUE;
 #endif
 
+  /* FIXME re-using buffer pool breaks renegotiation */
   GST_OBJECT_LOCK (sink);
   pool = sink->pool ? gst_object_ref (sink->pool) : NULL;
   GST_OBJECT_UNLOCK (sink);
@@ -497,9 +490,7 @@ gst_d3dvideosink_propose_allocation (GstBaseSink * bsink, GstQuery * query)
       pool = NULL;
     }
     gst_structure_free (config);
-  }
-
-  if (pool == NULL && need_pool) {
+  } else {
     GstVideoInfo info;
 
     if (!gst_video_info_from_caps (&info, caps)) {
@@ -508,11 +499,13 @@ gst_d3dvideosink_propose_allocation (GstBaseSink * bsink, GstQuery * query)
       return FALSE;
     }
 
-    GST_DEBUG_OBJECT (sink, "create new pool");
-    pool = gst_d3dsurface_buffer_pool_new (sink);
-
     /* the normal size of a frame */
     size = info.size;
+  }
+
+  if (pool == NULL && need_pool) {
+    GST_DEBUG_OBJECT (sink, "create new pool");
+    pool = gst_d3dsurface_buffer_pool_new (sink);
 
     config = gst_buffer_pool_get_config (pool);
     /* we need at least 2 buffer because we hold on to the last one */
@@ -524,16 +517,15 @@ gst_d3dvideosink_propose_allocation (GstBaseSink * bsink, GstQuery * query)
     }
   }
 
-  if (pool) {
-    /* we need at least 2 buffer because we hold on to the last one */
-    gst_query_add_allocation_pool (query, pool, size, 2, 0);
+  /* we need at least 2 buffer because we hold on to the last one */
+  gst_query_add_allocation_pool (query, pool, size, 2, 0);
+  if (pool)
     gst_object_unref (pool);
-  }
 
   return TRUE;
 }
 
-/** PUBLIC FUNCTIONS **/
+/* PUBLIC FUNCTIONS */
 
 /* Iterface Registrations */
 
@@ -610,7 +602,7 @@ gst_d3dvideosink_navigation_send_event (GstNavigation * navigation,
   }
 }
 
-/** PRIVATE FUNCTIONS **/
+/* PRIVATE FUNCTIONS */
 
 
 /* Plugin entry point */
@@ -627,6 +619,6 @@ plugin_init (GstPlugin * plugin)
 
 GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
     GST_VERSION_MINOR,
-    d3dsinkwrapper,
-    "Direct3D sink wrapper plugin",
+    d3d,
+    "Direct3D plugin",
     plugin_init, VERSION, "LGPL", GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)

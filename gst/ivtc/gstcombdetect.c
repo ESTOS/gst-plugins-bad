@@ -18,18 +18,18 @@
  */
 /**
  * SECTION:element-gstcombdetect
+ * @title: gstcombdetect
  *
  * The combdetect element detects if combing artifacts are present in
  * a raw video stream, and if so, marks them with a zebra stripe
  * pattern.
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 -v filesrc location=file.mov ! decodebin ! combdetect !
  *     xvimagesink
  * ]|
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -103,10 +103,10 @@ gst_comb_detect_class_init (GstCombDetectClass * klass)
 
   /* Setting up pads and setting metadata should be moved to
      base_class_init if you intend to subclass this class. */
-  gst_element_class_add_pad_template (GST_ELEMENT_CLASS (klass),
-      gst_static_pad_template_get (&gst_comb_detect_sink_template));
-  gst_element_class_add_pad_template (GST_ELEMENT_CLASS (klass),
-      gst_static_pad_template_get (&gst_comb_detect_src_template));
+  gst_element_class_add_static_pad_template (GST_ELEMENT_CLASS (klass),
+      &gst_comb_detect_sink_template);
+  gst_element_class_add_static_pad_template (GST_ELEMENT_CLASS (klass),
+      &gst_comb_detect_src_template);
 
   gst_element_class_set_static_metadata (GST_ELEMENT_CLASS (klass),
       "Comb Detect", "Video/Filter", "Detect combing artifacts in video stream",

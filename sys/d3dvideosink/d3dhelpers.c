@@ -36,7 +36,7 @@ typedef enum
   WINDOW_VISIBILITY_ERROR = 4
 } WindowHandleVisibility;
 
-/** FWD DECLS **/
+/* FWD DECLS */
 
 static gboolean d3d_hidden_window_thread (GstD3DVideoSinkClass * klass);
 static gboolean d3d_window_wndproc_set (GstD3DVideoSink * sink);
@@ -68,7 +68,7 @@ static gint WM_D3DVIDEO_NOTIFY_DEVICE_LOST = 0;
 
 #define WM_QUIT_THREAD  WM_USER+0
 
-/** Helpers **/
+/* Helpers */
 
 #define ERROR_CHECK_HR(hr)                          \
   if(hr != S_OK) {                                  \
@@ -119,7 +119,7 @@ static gint WM_D3DVIDEO_NOTIFY_DEVICE_LOST = 0;
 #define D3DFMT_NV12 MAKEFOURCC ('N', 'V', '1', '2')
 #endif
 
-/** FORMATS **/
+/* FORMATS */
 
 #define CASE(x) case x: return #x;
 static const gchar *
@@ -489,6 +489,7 @@ gst_d3dsurface_buffer_pool_new (GstD3DVideoSink * sink)
   GstD3DSurfaceBufferPool *pool;
 
   pool = g_object_new (GST_TYPE_D3DSURFACE_BUFFER_POOL, NULL);
+  gst_object_ref_sink (pool);
   pool->sink = gst_object_ref (sink);
 
   GST_LOG_OBJECT (pool, "new buffer pool %p", pool);
@@ -518,18 +519,85 @@ gst_d3dsurface_buffer_pool_get_options (GstBufferPool * pool)
   return options;
 }
 
+/* Calculate actual required buffer size from D3DLOCKED_RECT structure.
+ * Note that D3D could require larger Pitch value than minimum required one in theory.
+ * See also
+ * https://docs.microsoft.com/en-us/windows/desktop/direct3d9/width-vs--pitch */
+static gboolean
+d3d_calculate_buffer_size (GstVideoInfo * info, D3DLOCKED_RECT * lr,
+    gsize * offset, gint * stride, gsize * size)
+{
+  switch (GST_VIDEO_INFO_FORMAT (info)) {
+    case GST_VIDEO_FORMAT_BGR:
+    case GST_VIDEO_FORMAT_BGRx:
+    case GST_VIDEO_FORMAT_RGBx:
+    case GST_VIDEO_FORMAT_BGRA:
+    case GST_VIDEO_FORMAT_RGBA:
+    case GST_VIDEO_FORMAT_RGB16:
+    case GST_VIDEO_FORMAT_RGB15:
+    case GST_VIDEO_FORMAT_YUY2:
+    case GST_VIDEO_FORMAT_UYVY:
+      offset[0] = 0;
+      stride[0] = lr->Pitch;
+      *size = lr->Pitch * GST_VIDEO_INFO_HEIGHT (info);
+      break;
+    case GST_VIDEO_FORMAT_I420:
+    case GST_VIDEO_FORMAT_YV12:
+      offset[0] = 0;
+      stride[0] = lr->Pitch;
+      if (GST_VIDEO_INFO_FORMAT (info) == GST_VIDEO_FORMAT_YV12) {
+        offset[1] =
+            offset[0] + stride[0] * GST_VIDEO_INFO_COMP_HEIGHT (info, 0);
+        stride[1] = lr->Pitch / 2;
+        offset[2] =
+            offset[1] + stride[1] * GST_VIDEO_INFO_COMP_HEIGHT (info, 1);
+        stride[2] = lr->Pitch / 2;
+        *size = offset[2] + stride[2] * GST_VIDEO_INFO_COMP_HEIGHT (info, 2);
+      } else {
+        offset[2] =
+            offset[0] + stride[0] * GST_VIDEO_INFO_COMP_HEIGHT (info, 0);
+        stride[2] = lr->Pitch / 2;
+        offset[1] =
+            offset[2] + stride[2] * GST_VIDEO_INFO_COMP_HEIGHT (info, 2);
+        stride[1] = lr->Pitch / 2;
+        *size = offset[1] + stride[1] * GST_VIDEO_INFO_COMP_HEIGHT (info, 1);
+      }
+      break;
+    case GST_VIDEO_FORMAT_NV12:
+      offset[0] = 0;
+      stride[0] = lr->Pitch;
+      offset[1] = offset[0] + stride[0] * GST_VIDEO_INFO_COMP_HEIGHT (info, 0);
+      stride[1] = lr->Pitch;
+      *size = offset[1] + stride[1] * GST_VIDEO_INFO_COMP_HEIGHT (info, 1);
+      break;
+    default:
+      return FALSE;
+  }
+
+  GST_LOG ("Calculated buffer size: %" G_GSIZE_FORMAT
+      " (%s %dx%d, Pitch %d)", *size,
+      gst_video_format_to_string (GST_VIDEO_INFO_FORMAT (info)),
+      GST_VIDEO_INFO_WIDTH (info), GST_VIDEO_INFO_HEIGHT (info), lr->Pitch);
+
+  return TRUE;
+}
+
 static gboolean
 gst_d3dsurface_buffer_pool_set_config (GstBufferPool * bpool,
     GstStructure * config)
 {
   GstD3DSurfaceBufferPool *pool = GST_D3DSURFACE_BUFFER_POOL_CAST (bpool);
+  GstD3DVideoSink *sink = pool->sink;
+  GstD3DVideoSinkClass *klass = GST_D3DVIDEOSINK_GET_CLASS (sink);
   GstCaps *caps;
   GstVideoInfo info;
-
-  if (!GST_BUFFER_POOL_CLASS
-      (gst_d3dsurface_buffer_pool_parent_class)->set_config (bpool, config)) {
-    return FALSE;
-  }
+  LPDIRECT3DSURFACE9 surface;
+  D3DFORMAT d3dformat;
+  gint stride[GST_VIDEO_MAX_PLANES] = { 0, };
+  gsize offset[GST_VIDEO_MAX_PLANES] = { 0, };
+  D3DLOCKED_RECT lr;
+  HRESULT hr;
+  gsize size;
 
   if (!gst_buffer_pool_config_get_params (config, &caps, NULL, NULL, NULL)
       || !caps) {
@@ -543,8 +611,8 @@ gst_d3dsurface_buffer_pool_set_config (GstBufferPool * bpool,
     return FALSE;
   }
 
-  if (gst_video_format_to_d3d_format (GST_VIDEO_INFO_FORMAT (&info)) ==
-      D3DFMT_UNKNOWN) {
+  d3dformat = gst_video_format_to_d3d_format (GST_VIDEO_INFO_FORMAT (&info));
+  if (d3dformat == D3DFMT_UNKNOWN) {
     GST_ERROR_OBJECT (pool, "Unsupported video format in caps %" GST_PTR_FORMAT,
         caps);
     return FALSE;
@@ -553,17 +621,49 @@ gst_d3dsurface_buffer_pool_set_config (GstBufferPool * bpool,
   GST_LOG_OBJECT (pool, "%dx%d, caps %" GST_PTR_FORMAT, info.width, info.height,
       caps);
 
+  /* Create a surface to get exact buffer size */
+  hr = IDirect3DDevice9_CreateOffscreenPlainSurface (klass->d3d.
+      device.d3d_device, GST_VIDEO_INFO_WIDTH (&info),
+      GST_VIDEO_INFO_HEIGHT (&info), d3dformat, D3DPOOL_DEFAULT, &surface,
+      NULL);
+  if (hr != D3D_OK) {
+    GST_ERROR_OBJECT (sink, "Failed to create D3D surface");
+    return FALSE;
+  }
+
+  IDirect3DSurface9_LockRect (surface, &lr, NULL, 0);
+  if (!lr.pBits) {
+    GST_ERROR_OBJECT (sink, "Failed to lock D3D surface");
+    IDirect3DSurface9_Release (surface);
+    return FALSE;
+  }
+
+  if (!d3d_calculate_buffer_size (&info, &lr, offset, stride, &size)) {
+    GST_ERROR_OBJECT (sink, "Failed to get buffer size");
+    IDirect3DSurface9_UnlockRect (surface);
+    IDirect3DSurface9_Release (surface);
+    return FALSE;
+  }
+
+  IDirect3DSurface9_UnlockRect (surface);
+  IDirect3DSurface9_Release (surface);
+
   pool->info = info;
 
   pool->add_metavideo =
       gst_buffer_pool_config_has_option (config,
       GST_BUFFER_POOL_OPTION_VIDEO_META);
 
-  if (pool->add_metavideo)
+  if (pool->add_metavideo) {
     pool->allocator =
         g_object_new (GST_TYPE_D3D_SURFACE_MEMORY_ALLOCATOR, NULL);
+    gst_object_ref_sink (pool->allocator);
+  }
 
-  return TRUE;
+  gst_buffer_pool_config_set_params (config, caps, size, 2, 0);
+
+  return GST_BUFFER_POOL_CLASS
+      (gst_d3dsurface_buffer_pool_parent_class)->set_config (bpool, config);
 }
 
 static GstFlowReturn
@@ -606,68 +706,11 @@ gst_d3dsurface_buffer_pool_alloc_buffer (GstBufferPool * bpool,
     goto fallback;
   }
 
-  switch (GST_VIDEO_INFO_FORMAT (&pool->info)) {
-    case GST_VIDEO_FORMAT_BGR:
-      offset[0] = 0;
-      stride[0] = lr.Pitch;
-      size = lr.Pitch * GST_VIDEO_INFO_HEIGHT (&pool->info) * 3;
-      break;
-    case GST_VIDEO_FORMAT_BGRx:
-    case GST_VIDEO_FORMAT_RGBx:
-    case GST_VIDEO_FORMAT_BGRA:
-    case GST_VIDEO_FORMAT_RGBA:
-      offset[0] = 0;
-      stride[0] = lr.Pitch;
-      size = lr.Pitch * GST_VIDEO_INFO_HEIGHT (&pool->info) * 4;
-      break;
-    case GST_VIDEO_FORMAT_RGB16:
-    case GST_VIDEO_FORMAT_RGB15:
-      offset[0] = 0;
-      stride[0] = lr.Pitch;
-      size = lr.Pitch * GST_VIDEO_INFO_HEIGHT (&pool->info) * 2;
-      break;
-    case GST_VIDEO_FORMAT_YUY2:
-    case GST_VIDEO_FORMAT_UYVY:
-      offset[0] = 0;
-      stride[0] = lr.Pitch;
-      size = lr.Pitch * GST_VIDEO_INFO_HEIGHT (&pool->info) * 2;
-      break;
-    case GST_VIDEO_FORMAT_I420:
-    case GST_VIDEO_FORMAT_YV12:
-      offset[0] = 0;
-      stride[0] = lr.Pitch;
-      if (GST_VIDEO_INFO_FORMAT (&pool->info) == GST_VIDEO_FORMAT_YV12) {
-        offset[1] =
-            offset[0] + stride[0] * GST_VIDEO_INFO_COMP_HEIGHT (&pool->info, 0);
-        stride[1] = lr.Pitch / 2;
-        offset[2] =
-            offset[1] + stride[1] * GST_VIDEO_INFO_COMP_HEIGHT (&pool->info, 1);
-        stride[2] = lr.Pitch / 2;
-        size =
-            offset[2] + stride[2] * GST_VIDEO_INFO_COMP_HEIGHT (&pool->info, 2);
-      } else {
-        offset[2] =
-            offset[0] + stride[0] * GST_VIDEO_INFO_COMP_HEIGHT (&pool->info, 0);
-        stride[2] = lr.Pitch / 2;
-        offset[1] =
-            offset[2] + stride[2] * GST_VIDEO_INFO_COMP_HEIGHT (&pool->info, 2);
-        stride[1] = lr.Pitch / 2;
-        size =
-            offset[1] + stride[1] * GST_VIDEO_INFO_COMP_HEIGHT (&pool->info, 1);
-      }
-      break;
-    case GST_VIDEO_FORMAT_NV12:
-      offset[0] = 0;
-      stride[0] = lr.Pitch;
-      offset[1] =
-          offset[0] + stride[0] * GST_VIDEO_INFO_COMP_HEIGHT (&pool->info, 0);
-      stride[1] = lr.Pitch;
-      size =
-          offset[1] + stride[1] * GST_VIDEO_INFO_COMP_HEIGHT (&pool->info, 1);
-      break;
-    default:
-      g_assert_not_reached ();
-      break;
+  if (!d3d_calculate_buffer_size (&pool->info, &lr, offset, stride, &size)) {
+    GST_ERROR_OBJECT (sink, "Failed to get buffer size");
+    IDirect3DSurface9_UnlockRect (surface);
+    IDirect3DSurface9_Release (surface);
+    return GST_FLOW_ERROR;
   }
 
   IDirect3DSurface9_UnlockRect (surface);
@@ -717,7 +760,7 @@ gst_d3dsurface_buffer_pool_release_buffer (GstBufferPool * bpool,
     return;
   }
 
-  return GST_BUFFER_POOL_CLASS
+  GST_BUFFER_POOL_CLASS
       (gst_d3dsurface_buffer_pool_parent_class)->release_buffer (bpool, buffer);
 }
 
@@ -810,9 +853,7 @@ d3d_supported_caps (GstD3DVideoSink * sink)
 
 #ifndef GST_DISABLE_GST_DEBUG
   {
-    gchar *tmp = gst_caps_to_string (caps);
-    GST_DEBUG_OBJECT (sink, "Supported caps: %s", tmp);
-    g_free (tmp);
+    GST_DEBUG_OBJECT (sink, "Supported caps: %" GST_PTR_FORMAT, caps);
   }
 #endif
 
@@ -980,7 +1021,7 @@ end:
   return ret;
 }
 
-/** Windows for rendering (User Set or Internal) **/
+/* Windows for rendering (User Set or Internal) */
 
 static void
 d3d_window_wndproc_unset (GstD3DVideoSink * sink)
@@ -1207,10 +1248,16 @@ d3d_stop (GstD3DVideoSink * sink)
 
   /* Release D3D resources */
   d3d_set_window_handle (sink, 0, FALSE);
+
+  if (sink->internal_window_thread) {
+    g_thread_join (sink->internal_window_thread);
+    sink->internal_window_thread = NULL;
+  }
+
   return TRUE;
 }
 
-/** D3D Lost and Reset Device **/
+/* D3D Lost and Reset Device */
 
 static void
 d3d_notify_device_lost (GstD3DVideoSink * sink)
@@ -1258,7 +1305,7 @@ d3d_notify_device_reset (GstD3DVideoSink * sink)
   UNLOCK_SINK (sink);
 }
 
-/** Swap Chains **/
+/* Swap Chains */
 
 static gboolean
 d3d_init_swap_chain (GstD3DVideoSink * sink, HWND hWnd)
@@ -1990,7 +2037,7 @@ end:
 }
 
 
-/** D3D Window Proc Functions **/
+/* D3D Window Proc Functions */
 
 static LRESULT APIENTRY
 d3d_wnd_proc (HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -2112,7 +2159,7 @@ end:
   return ret;
 }
 
-/** Internal Window **/
+/* Internal Window */
 
 static LRESULT APIENTRY
 d3d_wnd_proc_internal (HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -2261,6 +2308,8 @@ d3d_create_internal_window (GstD3DVideoSink * sink)
     return 0;
   }
 
+  sink->internal_window_thread = thread;
+
   /* Wait 10 seconds for window proc loop to start up */
   for (i = 0; dat.running == FALSE && i < intervals; i++) {
     g_usleep (timeout_interval);
@@ -2271,7 +2320,7 @@ d3d_create_internal_window (GstD3DVideoSink * sink)
   return dat.hWnd;
 }
 
-/*** D3D Video Class Methdos ***/
+/* D3D Video Class Methdos */
 
 gboolean
 d3d_class_init (GstD3DVideoSink * sink)
@@ -2592,7 +2641,7 @@ end:;
   UNLOCK_CLASS (NULL, klass);
 }
 
-/** Hidden Window Loop Thread **/
+/* Hidden Window Loop Thread */
 
 static LRESULT APIENTRY
 D3DHiddenWndProc (HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)

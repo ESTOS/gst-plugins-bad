@@ -45,32 +45,29 @@
 
 /**
  * SECTION:element-tiger
+ * @title: tiger
  * @see_also: katedec
  *
- * <refsect2>
- * <para>
  * This element decodes and renders Kate streams
  * <ulink url="http://libkate.googlecode.com/">Kate</ulink> is a free codec
  * for text based data, such as subtitles. Any number of kate streams can be
  * embedded in an Ogg stream.
- * </para>
- * <para>
+ *
  * libkate (see above url) and <ulink url="http://libtiger.googlecode.com/">libtiger</ulink>
  * are needed to build this element.
- * </para>
- * <title>Example pipeline</title>
- * <para>
+ *
+ * ## Example pipeline
+ *
  * This pipeline renders a Kate stream on top of a Theora video multiplexed
  * in the same stream:
- * <programlisting>
+ * |[
  * gst-launch-1.0 \
  *   filesrc location=video.ogg ! oggdemux name=demux \
  *   demux. ! queue ! theoradec ! videoconvert ! tiger name=tiger \
  *   demux. ! queue ! kateparse ! tiger. \
  *   tiger. ! videoconvert ! autovideosink
- * </programlisting>
- * </para>
- * </refsect2>
+ * ]|
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -219,12 +216,10 @@ gst_kate_tiger_base_init (gpointer gclass)
 
   GstElementClass *element_class = GST_ELEMENT_CLASS (gclass);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&src_factory));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&kate_sink_factory));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&video_sink_factory));
+  gst_element_class_add_static_pad_template (element_class, &src_factory);
+  gst_element_class_add_static_pad_template (element_class, &kate_sink_factory);
+  gst_element_class_add_static_pad_template (element_class,
+      &video_sink_factory);
   gst_element_class_set_static_metadata (element_class, "Kate stream renderer",
       "Mixer/Video/Overlay/Subtitle",
       "Decodes and renders Kate streams on top of a video",

@@ -134,6 +134,7 @@ enum TsMuxStreamType {
   TSMUX_ST_VIDEO_MPEG4                = 0x10,
   TSMUX_ST_VIDEO_H264                 = 0x1b,
   TSMUX_ST_VIDEO_HEVC                 = 0x24,
+  TSMUX_ST_VIDEO_JP2K = 0x21,
 
   /* private stream types */
   TSMUX_ST_PS_AUDIO_AC3               = 0x81,
@@ -183,9 +184,9 @@ struct TsMuxStream {
   /* optional fixed PES size for stream type */
   guint16 pes_payload_size;
   /* current PES payload size being written */
-  guint16 cur_pes_payload_size;
+  guint32 cur_pes_payload_size;
   /* ... of which already this much written */
-  guint16 pes_bytes_written;
+  guint32 pes_bytes_written;
 
   /* PTS/DTS to write if the flags in the packet info are set */
   /* in MPEG PTS clock time */
@@ -211,10 +212,21 @@ struct TsMuxStream {
   gchar language[4];
 
   gboolean is_meta;
+  gboolean is_audio;
 
   /* Opus */
   gboolean is_opus;
   guint8 opus_channel_config_code;
+  /* Jpeg2000 */
+  gint32 horizontal_size;
+  gint32 vertical_size;
+  gint32 den;
+  gint32 num;
+  /* Maximum bitrate box */
+  guint32 max_bitrate;
+  guint16 profile_and_level;
+  gboolean interlace_mode;
+  guint8 color_spec;
 };
 
 /* stream management */

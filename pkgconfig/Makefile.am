@@ -6,7 +6,7 @@ pcverfiles =  \
 	gstreamer-insertbin-@GST_API_VERSION@.pc \
 	gstreamer-mpegts-@GST_API_VERSION@.pc \
 	gstreamer-player-@GST_API_VERSION@.pc \
-	gstreamer-bad-base-@GST_API_VERSION@.pc \
+	gstreamer-webrtc-@GST_API_VERSION@.pc \
 	gstreamer-bad-audio-@GST_API_VERSION@.pc \
 	gstreamer-bad-video-@GST_API_VERSION@.pc
 
@@ -16,14 +16,9 @@ pcverfiles_uninstalled = \
 	gstreamer-insertbin-@GST_API_VERSION@-uninstalled.pc \
 	gstreamer-mpegts-@GST_API_VERSION@-uninstalled.pc \
 	gstreamer-player-@GST_API_VERSION@-uninstalled.pc \
-	gstreamer-bad-base-@GST_API_VERSION@-uninstalled.pc \
+	gstreamer-webrtc-@GST_API_VERSION@-uninstalled.pc \
 	gstreamer-bad-audio-@GST_API_VERSION@-uninstalled.pc \
 	gstreamer-bad-video-@GST_API_VERSION@-uninstalled.pc
-
-if HAVE_GST_GL
-pcverfiles += gstreamer-gl-@GST_API_VERSION@.pc
-pcverfiles_uninstalled += gstreamer-gl-@GST_API_VERSION@-uninstalled.pc
-endif
 
 all-local: $(pcverfiles) $(pcverfiles_uninstalled)
 
@@ -35,7 +30,21 @@ cp_verbose_0 = @echo "  CP     $@";
 %-@GST_API_VERSION@.pc: %.pc
 	$(cp_verbose_0)cp $< $@
 %-@GST_API_VERSION@-uninstalled.pc: %-uninstalled.pc
-	$(cp_verbose_0)cp $< $@
+### the uninstalled libdir is depend of the build system used so set it here
+### rather than hardcoding it in the file directly.
+	$(AM_V_GEN) sed \
+		-e "s|[@]audiolibdir[@]|$(abs_top_builddir)/gst-libs/gst/audio/.libs|" \
+		-e "s|[@]videolibdir[@]|$(abs_top_builddir)/gst-libs/gst/video/.libs|" \
+		-e "s|[@]codecparserslibdir[@]|$(abs_top_builddir)/gst-libs/gst/codecparsers/.libs|" \
+		-e "s|[@]gllibdir[@]|$(abs_top_builddir)/gst-libs/gst/gl/.libs|" \
+		-e "s|[@]insertbinlibdir[@]|$(abs_top_builddir)/gst-libs/gst/insertbin/.libs|" \
+		-e "s|[@]mpegtslibdir[@]|$(abs_top_builddir)/gst-libs/gst/mpegts/.libs|" \
+		-e "s|[@]playerlibdir[@]|$(abs_top_builddir)/gst-libs/gst/player/.libs|" \
+		-e "s|[@]waylandlibdir[@]|$(abs_top_builddir)/gst-libs/gst/wayland/.libs|" \
+		-e "s|[@]webrtclibdir[@]|$(abs_top_builddir)/gst-libs/gst/webrtc/.libs|" \
+		-e "s|[@]basecamerabinsrclibdir[@]|$(abs_top_builddir)/gst-libs/gst/basecamerabinsrc/.libs|" \
+		-e "s|[@]photographylibdir[@]|$(abs_top_builddir)/gst-libs/gst/interfaces/.libs|" \
+		$< > $@.tmp && mv $@.tmp $@
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = $(pcverfiles)
@@ -44,13 +53,12 @@ CLEANFILES = $(pcverfiles) $(pcverfiles_uninstalled)
 pcinfiles = \
            gstreamer-plugins-bad.pc.in gstreamer-plugins-bad-uninstalled.pc.in \
            gstreamer-codecparsers.pc.in gstreamer-codecparsers-uninstalled.pc.in \
-           gstreamer-gl.pc.in gstreamer-gl-uninstalled.pc.in \
            gstreamer-insertbin.pc.in gstreamer-insertbin-uninstalled.pc.in \
            gstreamer-mpegts.pc.in gstreamer-mpegts-uninstalled.pc.in \
            gstreamer-player.pc.in gstreamer-player-uninstalled.pc.in \
+           gstreamer-webrtc.pc.in gstreamer-webrtc-uninstalled.pc.in \
            gstreamer-bad-audio.pc.in gstreamer-bad-audio-uninstalled.pc.in \
-           gstreamer-bad-video.pc.in gstreamer-bad-video-uninstalled.pc.in \
-           gstreamer-bad-base.pc.in gstreamer-bad-base-uninstalled.pc.in
+           gstreamer-bad-video.pc.in gstreamer-bad-video-uninstalled.pc.in
 
 DISTCLEANFILES = $(pcinfiles:.in=)
 EXTRA_DIST = $(pcinfiles)

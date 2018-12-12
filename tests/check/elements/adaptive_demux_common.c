@@ -25,11 +25,6 @@
 
 #define GST_TEST_HTTP_SRC_NAME            "testhttpsrc"
 
-struct _GstAdaptiveDemuxTestCaseClass
-{
-  GObjectClass parent_class;
-};
-
 #define gst_adaptive_demux_test_case_parent_class parent_class
 
 static void gst_adaptive_demux_test_case_dispose (GObject * object);
@@ -124,7 +119,7 @@ gst_adaptive_demux_test_case_finalize (GObject * object)
 GstAdaptiveDemuxTestCase *
 gst_adaptive_demux_test_case_new (void)
 {
-  return g_object_newv (GST_TYPE_ADAPTIVE_DEMUX_TEST_CASE, 0, NULL);
+  return g_object_new (GST_TYPE_ADAPTIVE_DEMUX_TEST_CASE, NULL);
 }
 
 
@@ -135,10 +130,11 @@ gst_adaptive_demux_test_find_test_data_by_stream (GstAdaptiveDemuxTestCase *
   gchar *pad_name;
   GstAdaptiveDemuxTestExpectedOutput *ret = NULL;
   guint count = 0;
+  GList *walk;
 
   pad_name = gst_pad_get_name (stream->pad);
   fail_unless (pad_name != NULL);
-  for (GList * walk = testData->output_streams; walk; walk = g_list_next (walk)) {
+  for (walk = testData->output_streams; walk; walk = g_list_next (walk)) {
     GstAdaptiveDemuxTestExpectedOutput *td = walk->data;
     if (strcmp (td->name, pad_name) == 0) {
       ret = td;
@@ -162,12 +158,32 @@ gst_adaptive_demux_test_check_received_data (GstAdaptiveDemuxTestEngine *
   guint64 streamOffset;
   GstAdaptiveDemuxTestCase *testData = GST_ADAPTIVE_DEMUX_TEST_CASE (user_data);
   GstAdaptiveDemuxTestExpectedOutput *testOutputStreamData;
+  guint64 i;
 
   fail_unless (stream != NULL);
   fail_unless (engine->pipeline != NULL);
   testOutputStreamData =
       gst_adaptive_demux_test_find_test_data_by_stream (testData, stream, NULL);
   fail_unless (testOutputStreamData != NULL);
+
+  GST_DEBUG
+      ("total_received_size=%" G_GUINT64_FORMAT
+      " segment_received_size = %" G_GUINT64_FORMAT
+      " buffer_size=%" G_GUINT64_FORMAT
+      " expected_size=%" G_GUINT64_FORMAT
+      " segment_start = %" G_GUINT64_FORMAT,
+      stream->total_received_size,
+      stream->segment_received_size,
+      (guint64) gst_buffer_get_size (buffer),
+      testOutputStreamData->expected_size, stream->segment_start);
+
+  /* Only verify after seeking */
+  if (testData->seek_event && testData->seeked)
+    fail_unless (stream->total_received_size +
+        stream->segment_received_size +
+        gst_buffer_get_size (buffer) <= testOutputStreamData->expected_size,
+        "Received unexpected data, please check what segments are being downloaded");
+
   streamOffset = stream->segment_start + stream->segment_received_size;
   if (testOutputStreamData->expected_data) {
     gsize size = gst_buffer_get_size (buffer);
@@ -183,13 +199,8 @@ gst_adaptive_demux_test_check_received_data (GstAdaptiveDemuxTestEngine *
 
   gst_buffer_map (buffer, &info, GST_MAP_READ);
 
-  GST_DEBUG
-      ("segment_start = %" G_GUINT64_FORMAT " segment_received_size = %"
-      G_GUINT64_FORMAT " bufferSize=%d",
-      stream->segment_start, stream->segment_received_size, (gint) info.size);
-
   pattern = streamOffset - streamOffset % sizeof (pattern);
-  for (guint64 i = 0; i != info.size; ++i) {
+  for (i = 0; i != info.size; ++i) {
     guint received = info.data[i];
     guint expected;
 
@@ -223,8 +234,19 @@ gst_adaptive_demux_test_check_received_data (GstAdaptiveDemuxTestEngine *
   return TRUE;
 }
 
-/* function to check total size of data received by AppSink
- * will be called when AppSink receives eos.
+/* AppSink EOS callback.
+ * To be used by tests that don't expect AppSink to receive EOS.
+ */
+void
+gst_adaptive_demux_test_unexpected_eos (GstAdaptiveDemuxTestEngine *
+    engine, GstAdaptiveDemuxTestOutputStream * stream, gpointer user_data)
+{
+  fail_if (TRUE);
+}
+
+/* AppSink EOS callback.
+ * To be used by tests that expect AppSink to receive EOS.
+ * Will check total size of data received by AppSink.
  */
 void
 gst_adaptive_demux_test_check_size_of_received_data (GstAdaptiveDemuxTestEngine
@@ -339,6 +361,7 @@ testSeekAdaptiveDemuxSendsData (GstAdaptiveDemuxTestEngine * engine,
         g_cond_wait (&testData->test_task_state_cond,
             &testData->test_task_state_lock);
       }
+      testData->seeked = TRUE;
       g_mutex_unlock (&testData->test_task_state_lock);
       /* we can continue now, but this buffer will be rejected by AppSink
        * because it is in flushing mode
@@ -410,6 +433,7 @@ testSeekOnStateChanged (GstBus * bus, GstMessage * msg, gpointer user_data)
         TEST_TASK_STATE_WAITING_FOR_TESTSRC_STATE_CHANGE) {
       GST_DEBUG ("changing test_task_state");
       testData->test_task_state = TEST_TASK_STATE_EXITING;
+      gst_bus_remove_signal_watch (bus);
       g_cond_signal (&testData->test_task_state_cond);
     }
     g_mutex_unlock (&testData->test_task_state_lock);
@@ -433,14 +457,17 @@ testSeekPreTestCallback (GstAdaptiveDemuxTestEngine * engine,
   gst_bus_add_signal_watch (bus);
   g_signal_connect (bus, "message::state-changed",
       G_CALLBACK (testSeekOnStateChanged), testData);
+  gst_object_unref (bus);
 }
 
 static void
 testSeekPostTestCallback (GstAdaptiveDemuxTestEngine * engine,
     gpointer user_data)
 {
+  GList *walk;
+
   GstAdaptiveDemuxTestCase *testData = GST_ADAPTIVE_DEMUX_TEST_CASE (user_data);
-  for (GList * walk = testData->output_streams; walk; walk = g_list_next (walk)) {
+  for (walk = testData->output_streams; walk; walk = g_list_next (walk)) {
     GstAdaptiveDemuxTestExpectedOutput *td = walk->data;
 
     fail_if (td->segment_verification_needed);

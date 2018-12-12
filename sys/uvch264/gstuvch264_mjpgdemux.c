@@ -23,6 +23,7 @@
 
 /**
  * SECTION:element-uvch264mjpgdemux
+ * @title: uvch264mjpgdemux
  * @short_description: UVC H264 compliant MJPG demuxer
  *
  * Parses a MJPG stream from a UVC H264 compliant encoding camera and extracts
@@ -147,6 +148,8 @@ struct _GstUvcH264MjpgDemuxPrivate
 
   /* input segment */
   GstSegment segment;
+  GstClockTime last_pts;
+  gboolean pts_reordered_warning;
 };
 
 typedef struct
@@ -190,20 +193,16 @@ gst_uvc_h264_mjpg_demux_class_init (GstUvcH264MjpgDemuxClass * klass)
   gobject_class->get_property = gst_uvc_h264_mjpg_demux_get_property;
   gobject_class->dispose = gst_uvc_h264_mjpg_demux_dispose;
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&mjpgsink_pad_template));
-
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&jpegsrc_pad_template));
-
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&h264src_pad_template));
-
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&yuy2src_pad_template));
-
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&nv12src_pad_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &mjpgsink_pad_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &jpegsrc_pad_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &h264src_pad_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &yuy2src_pad_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &nv12src_pad_template);
 
   gst_element_class_set_static_metadata (element_class,
       "UVC H264 MJPG Demuxer",
@@ -234,6 +233,8 @@ gst_uvc_h264_mjpg_demux_init (GstUvcH264MjpgDemux * self)
       GstUvcH264MjpgDemuxPrivate);
 
 
+  self->priv->last_pts = GST_CLOCK_TIME_NONE;
+  self->priv->pts_reordered_warning = FALSE;
   self->priv->device_fd = -1;
 
   /* create the sink and src pads */
@@ -372,6 +373,7 @@ gst_uvc_h264_mjpg_demux_sink_event (GstPad * pad, GstObject * parent,
   switch (GST_EVENT_TYPE (event)) {
     case GST_EVENT_SEGMENT:
       gst_event_copy_segment (event, &self->priv->segment);
+      self->priv->last_pts = GST_CLOCK_TIME_NONE;
       res = gst_pad_push_event (self->priv->jpeg_pad, event);
       break;
     case GST_EVENT_CAPS:
@@ -657,6 +659,32 @@ gst_uvc_h264_mjpg_demux_chain (GstPad * pad,
 
         /* Push completed aux data */
         if (aux_size == 0) {
+          /* Last attempt to apply timestamp. FIXME: This
+           * is broken for H.264 with B-frames */
+          if (GST_BUFFER_PTS (aux_buf) == GST_CLOCK_TIME_NONE) {
+            if (!self->priv->pts_reordered_warning &&
+                self->priv->last_pts != GST_CLOCK_TIME_NONE &&
+                self->priv->last_pts > GST_BUFFER_PTS (buf)) {
+              GST_WARNING_OBJECT (self, "PTS went backward, timestamping "
+                  "might be broken");
+              self->priv->pts_reordered_warning = TRUE;
+            }
+            self->priv->last_pts = GST_BUFFER_PTS (buf);
+
+            GST_BUFFER_PTS (aux_buf) = GST_BUFFER_PTS (buf);
+          }
+          if (GST_BUFFER_DTS (aux_buf) == GST_CLOCK_TIME_NONE) {
+            GstClockTime dts = GST_BUFFER_PTS (aux_buf);
+            GstClockTime delay = aux_header.delay * GST_MSECOND;
+            if (dts > delay)
+              dts -= delay;
+            else
+              dts = 0;
+            GST_BUFFER_DTS (aux_buf) = dts;
+            GST_LOG_OBJECT (self, "Applied DTS %" GST_TIME_FORMAT
+                " to aux_buf", GST_TIME_ARGS (dts));
+          }
+
           GST_DEBUG_OBJECT (self, "Pushing %" GST_FOURCC_FORMAT
               " auxiliary buffer %" GST_PTR_FORMAT,
               GST_FOURCC_ARGS (aux_header.type), *aux_caps);

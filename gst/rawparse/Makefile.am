@@ -1,24 +1,21 @@
 
-plugin_LTLIBRARIES = libgstrawparse.la
+plugin_LTLIBRARIES = libgstlegacyrawparse.la
 
-libgstrawparse_la_SOURCES = \
-	gstrawparse.c \
+libgstlegacyrawparse_la_SOURCES = \
 	gstaudioparse.c \
 	gstvideoparse.c \
 	plugin.c
-libgstrawparse_la_CFLAGS = \
+libgstlegacyrawparse_la_CFLAGS = \
 		$(GST_PLUGINS_BASE_CFLAGS) \
 		$(GST_BASE_CFLAGS) \
 		$(GST_CFLAGS)
-libgstrawparse_la_LIBADD = \
+libgstlegacyrawparse_la_LIBADD = \
 	$(GST_PLUGINS_BASE_LIBS) \
 	-lgstvideo-@GST_API_VERSION@ -lgstaudio-@GST_API_VERSION@ \
 	$(GST_BASE_LIBS) \
 	$(GST_LIBS)
-libgstrawparse_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS)
-libgstrawparse_la_LIBTOOLFLAGS = $(GST_PLUGIN_LIBTOOLFLAGS)
+libgstlegacyrawparse_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS)
 
 noinst_HEADERS = \
 	gstaudioparse.h \
-	gstrawparse.h \
 	gstvideoparse.h

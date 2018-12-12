@@ -6,6 +6,7 @@ libgstcodecparsers_@GST_API_VERSION@_la_SOURCES = \
 	parserutils.c nalutils.c dboolhuff.c vp8utils.c \
 	gstjpegparser.c \
 	gstmpegvideometa.c \
+	gstjpeg2000sampling.c \
 	gstvp9parser.c vp9utils.c
 
 libgstcodecparsers_@GST_API_VERSION@includedir = \
@@ -16,8 +17,10 @@ noinst_HEADERS = parserutils.h nalutils.h dboolhuff.h vp8utils.h vp9utils.h
 libgstcodecparsers_@GST_API_VERSION@include_HEADERS = \
 	gstmpegvideoparser.h gsth264parser.h gstvc1parser.h gstmpeg4parser.h \
 	gsth265parser.h gstvp8parser.h gstvp8rangedecoder.h \
+	codecparsers-prelude.h \
 	gstjpegparser.h \
 	gstmpegvideometa.h \
+	gstjpeg2000sampling.h \
 	gstvp9parser.h
 
 libgstcodecparsers_@GST_API_VERSION@_la_CFLAGS = \

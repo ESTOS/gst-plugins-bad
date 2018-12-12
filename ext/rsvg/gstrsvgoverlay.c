@@ -21,6 +21,7 @@
 
 /**
  * SECTION:element-rsvgoverlay
+ * @title: rsvgoverlay
  *
  * This elements overlays SVG graphics over the video. SVG data can
  * either be specified through properties, or fed through the
@@ -44,8 +45,7 @@
  * the values of the x/y/width/height attributes, by setting
  * height-/width-relative to 1.0. and all other attributes to 0.
  *
- * <refsect2>
- * <title>Example launch lines</title>
+ * ## Example launch lines
  * |[
  * gst-launch-1.0 -v videotestsrc ! videoconvert ! rsvgoverlay location=foo.svg ! videoconvert ! autovideosink
  * ]| specifies the SVG location through the filename property.
@@ -55,7 +55,7 @@
  * |[
  * gst-launch-1.0 -v videotestsrc ! videoconvert ! rsvgoverlay data='&lt;svg viewBox="0 0 800 600"&gt;&lt;image x="80%" y="80%" width="10%" height="10%" xlink:href="foo.jpg" /&gt;&lt;/svg&gt;' ! videoconvert ! autovideosink
  * ]|
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -451,12 +451,11 @@ gst_rsvg_overlay_class_init (GstRsvgOverlayClass * klass)
   GstVideoFilterClass *videofilter_class = GST_VIDEO_FILTER_CLASS (klass);
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&src_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&video_sink_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&data_sink_template));
+  gst_element_class_add_static_pad_template (element_class, &src_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &video_sink_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &data_sink_template);
 
   gst_element_class_set_static_metadata (element_class, "RSVG overlay",
       "Filter/Editor/Video",

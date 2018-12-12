@@ -497,6 +497,29 @@ gst_amc_jni_detach_current_thread (void *env)
   }
 }
 
+static JavaVM *
+get_application_java_vm (void)
+{
+  GModule *module = NULL;
+  JavaVM *(*get_java_vm) (void);
+  JavaVM *vm = NULL;
+
+  module = g_module_open (NULL, G_MODULE_BIND_LOCAL);
+
+  if (!module) {
+    return NULL;
+  }
+
+  if (g_module_symbol (module, "gst_android_get_java_vm",
+          (gpointer *) & get_java_vm) && get_java_vm) {
+    vm = get_java_vm ();
+  }
+
+  g_module_close (module);
+
+  return vm;
+}
+
 static gboolean
 check_nativehelper (void)
 {
@@ -660,6 +683,12 @@ gst_amc_jni_initialize_java_vm (void)
 
   if (java_vm) {
     GST_DEBUG ("Java VM already provided by the application");
+    return initialize_classes ();
+  }
+
+  java_vm = get_application_java_vm ();
+  if (java_vm) {
+    GST_DEBUG ("Java VM successfully requested from the application");
     return initialize_classes ();
   }
 
@@ -840,6 +869,13 @@ gst_amc_jni_get_application_class (JNIEnv * env, const gchar * name,
   jclass class_loader_cls = NULL;
   jmethodID load_class_id = 0;
 
+  GST_LOG ("attempting to retrieve class %s", name);
+
+  if (!get_class_loader) {
+    g_set_error (err, GST_LIBRARY_ERROR, GST_LIBRARY_ERROR_FAILED,
+        "Could not retreive application class loader function");
+    goto done;
+  }
 
   class_loader = get_class_loader ();
   if (!class_loader) {
@@ -858,7 +894,7 @@ gst_amc_jni_get_application_class (JNIEnv * env, const gchar * name,
   load_class_id =
       gst_amc_jni_get_method_id (env, err, class_loader_cls, "loadClass",
       "(Ljava/lang/String;)Ljava/lang/Class;");
-  if (!class_loader_cls) {
+  if (!load_class_id) {
     goto done;
   }
 

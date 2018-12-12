@@ -21,6 +21,7 @@
  */
 /**
  * SECTION:element-sirendec
+ * @title: sirendec
  *
  * This decodes audio buffers from the Siren 16 codec (a 16khz extension of
  * G.722.1) that is meant to be compatible with the Microsoft Windows Live
@@ -57,7 +58,7 @@ static gboolean gst_siren_dec_start (GstAudioDecoder * dec);
 static gboolean gst_siren_dec_stop (GstAudioDecoder * dec);
 static gboolean gst_siren_dec_set_format (GstAudioDecoder * dec,
     GstCaps * caps);
-static gboolean gst_siren_dec_parse (GstAudioDecoder * dec,
+static GstFlowReturn gst_siren_dec_parse (GstAudioDecoder * dec,
     GstAdapter * adapter, gint * offset, gint * length);
 static GstFlowReturn gst_siren_dec_handle_frame (GstAudioDecoder * dec,
     GstBuffer * buffer);
@@ -73,10 +74,8 @@ gst_siren_dec_class_init (GstSirenDecClass * klass)
 
   GST_DEBUG_CATEGORY_INIT (sirendec_debug, "sirendec", 0, "sirendec");
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&srctemplate));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sinktemplate));
+  gst_element_class_add_static_pad_template (element_class, &srctemplate);
+  gst_element_class_add_static_pad_template (element_class, &sinktemplate);
 
   gst_element_class_set_static_metadata (element_class, "Siren Decoder element",
       "Codec/Decoder/Audio ",

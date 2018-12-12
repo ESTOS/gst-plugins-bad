@@ -18,22 +18,22 @@
  */
 /**
  * SECTION:element-gstintervideosink
+ * @title: gstintervideosink
  *
  * The intervideosink element is a video sink element.  It is used
  * in connection with an intervideosrc element in a different pipeline,
  * similar to interaudiosink and interaudiosrc.
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 -v videotestsrc ! intervideosink
  * ]|
- * 
+ *
  * The intervideosink element cannot be used effectively with gst-launch-1.0,
  * as it requires a second pipeline in the application to send video to.
  * See the gstintertest.c example in the gst-plugins-bad source code for
  * more details.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -94,8 +94,8 @@ gst_inter_video_sink_class_init (GstInterVideoSinkClass * klass)
   GST_DEBUG_CATEGORY_INIT (gst_inter_video_sink_debug_category,
       "intervideosink", 0, "debug category for intervideosink element");
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_inter_video_sink_sink_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_inter_video_sink_sink_template);
 
   gst_element_class_set_static_metadata (element_class,
       "Internal video sink",

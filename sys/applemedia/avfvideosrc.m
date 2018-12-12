@@ -35,6 +35,9 @@
 #include "videotexturecache.h"
 
 #define DEFAULT_DEVICE_INDEX  -1
+#define DEFAULT_POSITION      GST_AVF_VIDEO_SOURCE_POSITION_DEFAULT
+#define DEFAULT_ORIENTATION   GST_AVF_VIDEO_SOURCE_ORIENTATION_DEFAULT
+#define DEFAULT_DEVICE_TYPE   GST_AVF_VIDEO_SOURCE_DEVICE_TYPE_DEFAULT
 #define DEFAULT_DO_STATS      FALSE
 
 #define DEVICE_FPS_N          25
@@ -81,12 +84,84 @@ typedef enum _QueueState {
 #define gst_avf_video_src_parent_class parent_class
 G_DEFINE_TYPE (GstAVFVideoSrc, gst_avf_video_src, GST_TYPE_PUSH_SRC);
 
+#define GST_TYPE_AVF_VIDEO_SOURCE_POSITION (gst_avf_video_source_position_get_type ())
+static GType
+gst_avf_video_source_position_get_type (void)
+{
+  static GType avf_video_source_position_type = 0;
+
+  if (!avf_video_source_position_type) {
+    static GEnumValue position_types[] = {
+      { GST_AVF_VIDEO_SOURCE_POSITION_FRONT, "Front-facing camera", "front" },
+      { GST_AVF_VIDEO_SOURCE_POSITION_BACK,  "Back-facing camera", "back"  },
+      { GST_AVF_VIDEO_SOURCE_POSITION_DEFAULT,  "Default", "default"  },
+      { 0, NULL, NULL },
+    };
+
+    avf_video_source_position_type =
+    g_enum_register_static ("GstAVFVideoSourcePosition",
+                            position_types);
+  }
+
+  return avf_video_source_position_type;
+}
+
+#define GST_TYPE_AVF_VIDEO_SOURCE_ORIENTATION (gst_avf_video_source_orientation_get_type ())
+static GType
+gst_avf_video_source_orientation_get_type (void)
+{
+  static GType avf_video_source_orientation_type = 0;
+
+  if (!avf_video_source_orientation_type) {
+    static GEnumValue orientation_types[] = {
+      { GST_AVF_VIDEO_SOURCE_ORIENTATION_PORTRAIT, "Indicates that video should be oriented vertically, top at the top.", "portrait" },
+      { GST_AVF_VIDEO_SOURCE_ORIENTATION_PORTRAIT_UPSIDE_DOWN, "Indicates that video should be oriented vertically, top at the bottom.", "portrat-upside-down" },
+      { GST_AVF_VIDEO_SOURCE_ORIENTATION_LANDSCAPE_RIGHT, "Indicates that video should be oriented horizontally, top on the left.", "landscape-right" },
+      { GST_AVF_VIDEO_SOURCE_ORIENTATION_LANDSCAPE_LEFT, "Indicates that video should be oriented horizontally, top on the right.", "landscape-left" },
+      { GST_AVF_VIDEO_SOURCE_ORIENTATION_DEFAULT, "Default", "default" },
+      { 0, NULL, NULL },
+    };
+
+    avf_video_source_orientation_type =
+    g_enum_register_static ("GstAVFVideoSourceOrientation",
+                            orientation_types);
+  }
+
+  return avf_video_source_orientation_type;
+}
+
+#define GST_TYPE_AVF_VIDEO_SOURCE_DEVICE_TYPE (gst_avf_video_source_device_type_get_type ())
+static GType
+gst_avf_video_source_device_type_get_type (void)
+{
+  static GType avf_video_source_device_type_type = 0;
+
+  if (!avf_video_source_device_type_type) {
+    static GEnumValue device_type_types[] = {
+      { GST_AVF_VIDEO_SOURCE_DEVICE_TYPE_BUILT_IN_WIDE_ANGLE_CAMERA, "A built-in wide angle camera. These devices are suitable for general purpose use.", "wide-angle" },
+      { GST_AVF_VIDEO_SOURCE_DEVICE_TYPE_BUILT_IN_TELEPHOTO_CAMERA, "A built-in camera device with a longer focal length than a wide-angle camera.", "telephoto" },
+      { GST_AVF_VIDEO_SOURCE_DEVICE_TYPE_BUILT_IN_DUAL_CAMERA, "A dual camera device, combining built-in wide-angle and telephoto cameras that work together as a single capture device.", "dual" },
+      { GST_AVF_VIDEO_SOURCE_DEVICE_TYPE_DEFAULT, "Default", "default" },
+      { 0, NULL, NULL },
+    };
+
+    avf_video_source_device_type_type =
+    g_enum_register_static ("GstAVFVideoSourceDeviceType",
+                            device_type_types);
+  }
+
+  return avf_video_source_device_type_type;
+}
+
 @interface GstAVFVideoSrcImpl : NSObject <AVCaptureVideoDataOutputSampleBufferDelegate> {
   GstElement *element;
   GstBaseSrc *baseSrc;
   GstPushSrc *pushSrc;
 
   gint deviceIndex;
+  GstAVFVideoSourcePosition position;
+  GstAVFVideoSourceOrientation orientation;
+  GstAVFVideoSourceDeviceType deviceType;
   BOOL doStats;
 
   AVCaptureSession *session;
@@ -125,6 +200,9 @@ G_DEFINE_TYPE (GstAVFVideoSrc, gst_avf_video_src, GST_TYPE_PUSH_SRC);
 - (void)finalize;
 
 @property int deviceIndex;
+@property GstAVFVideoSourcePosition position;
+@property GstAVFVideoSourceOrientation orientation;
+@property GstAVFVideoSourceDeviceType deviceType;
 @property BOOL doStats;
 @property int fps;
 @property BOOL captureScreen;
@@ -138,6 +216,7 @@ G_DEFINE_TYPE (GstAVFVideoSrc, gst_avf_video_src, GST_TYPE_PUSH_SRC);
 - (GstVideoFormat)getGstVideoFormat:(NSNumber *)pixel_format;
 #if !HAVE_IOS
 - (CGDirectDisplayID)getDisplayIdFromDeviceIndex;
+- (float)getScaleFactorFromDeviceIndex;
 #endif
 - (GstCaps *)getDeviceCaps;
 - (BOOL)setDeviceCaps:(GstVideoInfo *)info;
@@ -162,10 +241,54 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 
 @end
 
+#if HAVE_IOS
+
+static AVCaptureDeviceType GstAVFVideoSourceDeviceType2AVCaptureDeviceType(GstAVFVideoSourceDeviceType deviceType) {
+  switch (deviceType) {
+    case GST_AVF_VIDEO_SOURCE_DEVICE_TYPE_BUILT_IN_WIDE_ANGLE_CAMERA:
+      return AVCaptureDeviceTypeBuiltInWideAngleCamera;
+    case GST_AVF_VIDEO_SOURCE_DEVICE_TYPE_BUILT_IN_TELEPHOTO_CAMERA:
+      return AVCaptureDeviceTypeBuiltInTelephotoCamera;
+    case GST_AVF_VIDEO_SOURCE_DEVICE_TYPE_BUILT_IN_DUAL_CAMERA:
+      return AVCaptureDeviceTypeBuiltInDuoCamera;
+    case GST_AVF_VIDEO_SOURCE_DEVICE_TYPE_DEFAULT:
+      g_assert_not_reached();
+  }
+}
+
+static AVCaptureDevicePosition GstAVFVideoSourcePosition2AVCaptureDevicePosition(GstAVFVideoSourcePosition position) {
+  switch (position) {
+    case GST_AVF_VIDEO_SOURCE_POSITION_FRONT:
+      return AVCaptureDevicePositionFront;
+    case GST_AVF_VIDEO_SOURCE_POSITION_BACK:
+      return AVCaptureDevicePositionBack;
+    case GST_AVF_VIDEO_SOURCE_POSITION_DEFAULT:
+      g_assert_not_reached();
+  }
+
+}
+
+static AVCaptureVideoOrientation GstAVFVideoSourceOrientation2AVCaptureVideoOrientation(GstAVFVideoSourceOrientation orientation) {
+  switch (orientation) {
+    case GST_AVF_VIDEO_SOURCE_ORIENTATION_PORTRAIT:
+      return AVCaptureVideoOrientationPortrait;
+    case GST_AVF_VIDEO_SOURCE_ORIENTATION_PORTRAIT_UPSIDE_DOWN:
+      return AVCaptureVideoOrientationPortraitUpsideDown;
+    case GST_AVF_VIDEO_SOURCE_ORIENTATION_LANDSCAPE_LEFT:
+      return AVCaptureVideoOrientationLandscapeLeft;
+    case GST_AVF_VIDEO_SOURCE_ORIENTATION_LANDSCAPE_RIGHT:
+      return AVCaptureVideoOrientationLandscapeRight;
+    case GST_AVF_VIDEO_SOURCE_ORIENTATION_DEFAULT:
+      g_assert_not_reached();
+  }
+}
+
+#endif
+
 @implementation GstAVFVideoSrcImpl
 
-@synthesize deviceIndex, doStats, fps, captureScreen,
-            captureScreenCursor, captureScreenMouseClicks;
+@synthesize deviceIndex, position, orientation, deviceType, doStats,
+    fps, captureScreen, captureScreenCursor, captureScreenMouseClicks;
 
 - (id)init
 {
@@ -180,6 +303,9 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     pushSrc = src;
 
     deviceIndex = DEFAULT_DEVICE_INDEX;
+    position = DEFAULT_POSITION;
+    orientation = DEFAULT_ORIENTATION;
+    deviceType = DEFAULT_DEVICE_TYPE;
     captureScreen = NO;
     captureScreenCursor = NO;
     captureScreenMouseClicks = NO;
@@ -200,12 +326,8 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 
 - (void)finalize
 {
-  dispatch_release (mainQueue);
   mainQueue = NULL;
-  dispatch_release (workerQueue);
   workerQueue = NULL;
-
-  [super finalize];
 }
 
 - (BOOL)openDeviceInput
@@ -214,13 +336,24 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
   NSError *err;
 
   if (deviceIndex == DEFAULT_DEVICE_INDEX) {
-    device = [AVCaptureDevice defaultDeviceWithMediaType:mediaType];
+#ifdef HAVE_IOS
+    if (deviceType != DEFAULT_DEVICE_TYPE && position != DEFAULT_POSITION) {
+      device = [AVCaptureDevice
+                defaultDeviceWithDeviceType:GstAVFVideoSourceDeviceType2AVCaptureDeviceType(deviceType)
+                mediaType:mediaType
+                position:GstAVFVideoSourcePosition2AVCaptureDevicePosition(position)];
+    } else {
+      device = [AVCaptureDevice defaultDeviceWithMediaType:mediaType];
+    }
+#else
+      device = [AVCaptureDevice defaultDeviceWithMediaType:mediaType];
+#endif
     if (device == nil) {
       GST_ELEMENT_ERROR (element, RESOURCE, NOT_FOUND,
                           ("No video capture devices found"), (NULL));
       return NO;
     }
-  } else {
+  } else { // deviceIndex takes priority over position and deviceType
     NSArray *devices = [AVCaptureDevice devicesWithMediaType:mediaType];
     if (deviceIndex >= [devices count]) {
       GST_ELEMENT_ERROR (element, RESOURCE, NOT_FOUND,
@@ -230,7 +363,6 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     device = [devices objectAtIndex:deviceIndex];
   }
   g_assert (device != nil);
-  [device retain];
 
   GST_INFO ("Opening '%s'", [[device localizedName] UTF8String]);
 
@@ -241,11 +373,9 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
         ("Failed to open device: %s",
         [[err localizedDescription] UTF8String]),
         (NULL));
-    [device release];
     device = nil;
     return NO;
   }
-  [input retain];
   return YES;
 }
 
@@ -279,7 +409,6 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
   }
   screenInput.capturesMouseClicks = captureScreenMouseClicks;
   input = screenInput;
-  [input retain];
   return YES;
 #endif
 }
@@ -313,6 +442,10 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 
     /* retained by session */
     connection = [[output connections] firstObject];
+#ifdef HAVE_IOS
+    if (orientation != DEFAULT_ORIENTATION)
+      connection.videoOrientation = GstAVFVideoSourceOrientation2AVCaptureVideoOrientation(orientation);
+#endif
     inputClock = ((AVCaptureInputPort *)connection.inputPorts[0]).clock;
 
     *successPtr = YES;
@@ -336,17 +469,13 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     [session removeInput:input];
     [session removeOutput:output];
 
-    [session release];
     session = nil;
 
-    [input release];
     input = nil;
 
-    [output release];
     output = nil;
 
     if (!captureScreen) {
-      [device release];
       device = nil;
     }
 
@@ -416,7 +545,35 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
   displayId = [description objectForKey:@"NSScreenNumber"];
   return [displayId unsignedIntegerValue];
 }
+
+- (float)getScaleFactorFromDeviceIndex
+{
+  NSArray *screens = [NSScreen screens];
+
+  if (deviceIndex == DEFAULT_DEVICE_INDEX)
+    return [[NSScreen mainScreen] backingScaleFactor];
+  if (deviceIndex >= [screens count]) {
+    GST_ELEMENT_ERROR (element, RESOURCE, NOT_FOUND,
+                        ("Invalid screen capture device index"), (NULL));
+    return 1.0;
+  }
+  return [[screens objectAtIndex:deviceIndex] backingScaleFactor];
+}
 #endif
+
+
+- (CMVideoDimensions)orientedDimensions:(CMVideoDimensions)dimensions
+{
+  CMVideoDimensions orientedDimensions;
+  if (orientation == GST_AVF_VIDEO_SOURCE_ORIENTATION_PORTRAIT_UPSIDE_DOWN ||
+      orientation == GST_AVF_VIDEO_SOURCE_ORIENTATION_PORTRAIT) {
+    orientedDimensions.width = dimensions.height;
+    orientedDimensions.height = dimensions.width;
+  } else {
+    orientedDimensions = dimensions;
+  }
+  return orientedDimensions;
+}
 
 - (GstCaps *)getDeviceCaps
 {
@@ -438,12 +595,11 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
    * available in iOS >= 7.0. We use a dynamic approach with key-value
    * coding or performSelector */
   for (NSObject *f in [formats reverseObjectEnumerator]) {
-    CMFormatDescriptionRef formatDescription;
-    CMVideoDimensions dimensions;
-
     /* formatDescription can't be retrieved with valueForKey so use a selector here */
-    formatDescription = (CMFormatDescriptionRef) [f performSelector:@selector(formatDescription)];
-    dimensions = CMVideoFormatDescriptionGetDimensions(formatDescription);
+    CMFormatDescriptionRef formatDescription = (__bridge CMFormatDescriptionRef) [f performSelector:@selector(formatDescription)];
+    CMVideoDimensions dimensions = CMVideoFormatDescriptionGetDimensions(formatDescription);
+    dimensions = [self orientedDimensions:dimensions];
+
     for (NSObject *rate in [f valueForKey:@"videoSupportedFrameRateRanges"]) {
       int min_fps_n, min_fps_d, max_fps_n, max_fps_d;
       gdouble min_fps, max_fps;
@@ -511,11 +667,9 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 
   if ([device lockForConfiguration:NULL] == YES) {
     for (NSObject *f in formats) {
-      CMFormatDescriptionRef formatDescription;
-      CMVideoDimensions dimensions;
-
-      formatDescription = (CMFormatDescriptionRef) [f performSelector:@selector(formatDescription)];
-      dimensions = CMVideoFormatDescriptionGetDimensions(formatDescription);
+      CMFormatDescriptionRef formatDescription = (__bridge CMFormatDescriptionRef) [f performSelector:@selector(formatDescription)];
+      CMVideoDimensions dimensions = CMVideoFormatDescriptionGetDimensions(formatDescription);
+      dimensions = [self orientedDimensions:dimensions];
       if (dimensions.width == info->width && dimensions.height == info->height) {
         found_format = TRUE;
         [device setValue:f forKey:@"activeFormat"];
@@ -648,12 +802,13 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
   if (captureScreen) {
 #if !HAVE_IOS
     CGRect rect = CGDisplayBounds ([self getDisplayIdFromDeviceIndex]);
+    float scale = [self getScaleFactorFromDeviceIndex];
     for (NSNumber *pixel_format in pixel_formats) {
       GstVideoFormat gst_format = [self getGstVideoFormat:pixel_format];
       if (gst_format != GST_VIDEO_FORMAT_UNKNOWN)
         gst_caps_append (result, gst_caps_new_simple ("video/x-raw",
-            "width", G_TYPE_INT, (int)rect.size.width,
-            "height", G_TYPE_INT, (int)rect.size.height,
+            "width", G_TYPE_INT, (int)(rect.size.width * scale),
+            "height", G_TYPE_INT, (int)(rect.size.height * scale),
             "format", G_TYPE_STRING, gst_video_format_to_string (gst_format),
             NULL));
     }
@@ -789,9 +944,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
   dispatch_sync (mainQueue, ^{ [session stopRunning]; });
   dispatch_sync (workerQueue, ^{});
 
-  [bufQueueLock release];
   bufQueueLock = nil;
-  [bufQueue release];
   bufQueue = nil;
 
   if (textureCache)
@@ -886,7 +1039,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
   if ([bufQueue count] == BUFFER_QUEUE_SIZE)
     [bufQueue removeLastObject];
 
-  [bufQueue insertObject:@{@"sbuf": (id)sampleBuffer,
+  [bufQueue insertObject:@{@"sbuf": (__bridge id)sampleBuffer,
                            @"timestamp": @(timestamp),
                            @"duration": @(duration)}
                  atIndex:0];
@@ -909,7 +1062,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
   }
 
   NSDictionary *dic = (NSDictionary *) [bufQueue lastObject];
-  sbuf = (CMSampleBufferRef) dic[@"sbuf"];
+  sbuf = (__bridge CMSampleBufferRef) dic[@"sbuf"];
   timestamp = (GstClockTime) [dic[@"timestamp"] longLongValue];
   duration = (GstClockTime) [dic[@"duration"] longLongValue];
   CFRetain (sbuf);
@@ -938,18 +1091,12 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     }
   }
 
-  *buf = gst_core_media_buffer_new (sbuf, useVideoMeta);
+  *buf = gst_core_media_buffer_new (sbuf, useVideoMeta, textureCache);
   if (*buf == NULL) {
     CFRelease (sbuf);
     return GST_FLOW_ERROR;
   }
   CFRelease (sbuf);
-
-  if (textureCache != NULL) {
-    *buf = gst_video_texture_cache_get_gl_buffer (textureCache, *buf);
-    if (*buf == NULL)
-      return GST_FLOW_ERROR;
-  }
 
   GST_BUFFER_OFFSET (*buf) = offset++;
   GST_BUFFER_OFFSET_END (*buf) = GST_BUFFER_OFFSET (*buf) + 1;
@@ -1112,6 +1259,9 @@ enum
 {
   PROP_0,
   PROP_DEVICE_INDEX,
+  PROP_POSITION,
+  PROP_ORIENTATION,
+  PROP_DEVICE_TYPE,
   PROP_DO_STATS,
   PROP_FPS,
 #if !HAVE_IOS
@@ -1180,14 +1330,28 @@ gst_avf_video_src_class_init (GstAVFVideoSrcClass * klass)
       "Reads frames from an iOS AVFoundation device",
       "Ole André Vadla Ravnås <oleavr@soundrop.com>");
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&src_template));
+  gst_element_class_add_static_pad_template (gstelement_class, &src_template);
 
   g_object_class_install_property (gobject_class, PROP_DEVICE_INDEX,
       g_param_spec_int ("device-index", "Device Index",
           "The zero-based device index",
           -1, G_MAXINT, DEFAULT_DEVICE_INDEX,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_POSITION,
+                                   g_param_spec_enum ("position", "Position",
+                                                      "The position of the capture device (front or back-facing)",
+                                                      GST_TYPE_AVF_VIDEO_SOURCE_POSITION, DEFAULT_POSITION,
+                                                      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_ORIENTATION,
+                                   g_param_spec_enum ("orientation", "Orientation",
+                                                      "The orientation of the video",
+                                                      GST_TYPE_AVF_VIDEO_SOURCE_ORIENTATION, DEFAULT_ORIENTATION,
+                                                      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_DEVICE_TYPE,
+                                   g_param_spec_enum ("device-type", "Device Type",
+                                                      "The general type of a video capture device",
+                                                      GST_TYPE_AVF_VIDEO_SOURCE_DEVICE_TYPE, DEFAULT_DEVICE_TYPE,
+                                                      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_DO_STATS,
       g_param_spec_boolean ("do-stats", "Enable statistics",
           "Enable logging of statistics", DEFAULT_DO_STATS,
@@ -1215,28 +1379,16 @@ gst_avf_video_src_class_init (GstAVFVideoSrcClass * klass)
       0, "iOS AVFoundation video source");
 }
 
-#define OBJC_CALLOUT_BEGIN() \
-  NSAutoreleasePool *pool; \
-  \
-  pool = [[NSAutoreleasePool alloc] init]
-#define OBJC_CALLOUT_END() \
-  [pool release]
-
-
 static void
 gst_avf_video_src_init (GstAVFVideoSrc * src)
 {
-  OBJC_CALLOUT_BEGIN ();
-  src->impl = [[GstAVFVideoSrcImpl alloc] initWithSrc:GST_PUSH_SRC (src)];
-  OBJC_CALLOUT_END ();
+  src->impl = (__bridge_retained gpointer)[[GstAVFVideoSrcImpl alloc] initWithSrc:GST_PUSH_SRC (src)];
 }
 
 static void
 gst_avf_video_src_finalize (GObject * obj)
 {
-  OBJC_CALLOUT_BEGIN ();
-  [GST_AVF_VIDEO_SRC_IMPL (obj) release];
-  OBJC_CALLOUT_END ();
+  CFBridgingRelease(GST_AVF_VIDEO_SRC_CAST(obj)->impl);
 
   G_OBJECT_CLASS (parent_class)->finalize (obj);
 }
@@ -1261,6 +1413,15 @@ gst_avf_video_src_get_property (GObject * object, guint prop_id, GValue * value,
 #endif
     case PROP_DEVICE_INDEX:
       g_value_set_int (value, impl.deviceIndex);
+      break;
+    case PROP_POSITION:
+      g_value_set_enum(value, impl.position);
+      break;
+    case PROP_ORIENTATION:
+      g_value_set_enum(value, impl.orientation);
+      break;
+    case PROP_DEVICE_TYPE:
+      g_value_set_enum(value, impl.deviceType);
       break;
     case PROP_DO_STATS:
       g_value_set_boolean (value, impl.doStats);
@@ -1297,6 +1458,15 @@ gst_avf_video_src_set_property (GObject * object, guint prop_id,
     case PROP_DEVICE_INDEX:
       impl.deviceIndex = g_value_get_int (value);
       break;
+    case PROP_POSITION:
+      impl.position = g_value_get_enum(value);
+      break;
+    case PROP_ORIENTATION:
+      impl.orientation = g_value_get_enum(value);
+      break;
+    case PROP_DEVICE_TYPE:
+      impl.deviceType = g_value_get_enum(value);
+      break;
     case PROP_DO_STATS:
       impl.doStats = g_value_get_boolean (value);
       break;
@@ -1311,9 +1481,7 @@ gst_avf_video_src_change_state (GstElement * element, GstStateChange transition)
 {
   GstStateChangeReturn ret;
 
-  OBJC_CALLOUT_BEGIN ();
   ret = [GST_AVF_VIDEO_SRC_IMPL (element) changeState: transition];
-  OBJC_CALLOUT_END ();
 
   return ret;
 }
@@ -1323,9 +1491,7 @@ gst_avf_video_src_get_caps (GstBaseSrc * basesrc, GstCaps * filter)
 {
   GstCaps *ret;
 
-  OBJC_CALLOUT_BEGIN ();
   ret = [GST_AVF_VIDEO_SRC_IMPL (basesrc) getCaps];
-  OBJC_CALLOUT_END ();
 
   return ret;
 }
@@ -1335,9 +1501,7 @@ gst_avf_video_src_set_caps (GstBaseSrc * basesrc, GstCaps * caps)
 {
   gboolean ret;
 
-  OBJC_CALLOUT_BEGIN ();
   ret = [GST_AVF_VIDEO_SRC_IMPL (basesrc) setCaps:caps];
-  OBJC_CALLOUT_END ();
 
   return ret;
 }
@@ -1347,9 +1511,7 @@ gst_avf_video_src_start (GstBaseSrc * basesrc)
 {
   gboolean ret;
 
-  OBJC_CALLOUT_BEGIN ();
   ret = [GST_AVF_VIDEO_SRC_IMPL (basesrc) start];
-  OBJC_CALLOUT_END ();
 
   return ret;
 }
@@ -1359,9 +1521,7 @@ gst_avf_video_src_stop (GstBaseSrc * basesrc)
 {
   gboolean ret;
 
-  OBJC_CALLOUT_BEGIN ();
   ret = [GST_AVF_VIDEO_SRC_IMPL (basesrc) stop];
-  OBJC_CALLOUT_END ();
 
   return ret;
 }
@@ -1371,9 +1531,7 @@ gst_avf_video_src_query (GstBaseSrc * basesrc, GstQuery * query)
 {
   gboolean ret;
 
-  OBJC_CALLOUT_BEGIN ();
   ret = [GST_AVF_VIDEO_SRC_IMPL (basesrc) query:query];
-  OBJC_CALLOUT_END ();
 
   return ret;
 }
@@ -1383,9 +1541,7 @@ gst_avf_video_src_unlock (GstBaseSrc * basesrc)
 {
   gboolean ret;
 
-  OBJC_CALLOUT_BEGIN ();
   ret = [GST_AVF_VIDEO_SRC_IMPL (basesrc) unlock];
-  OBJC_CALLOUT_END ();
 
   return ret;
 }
@@ -1395,9 +1551,7 @@ gst_avf_video_src_unlock_stop (GstBaseSrc * basesrc)
 {
   gboolean ret;
 
-  OBJC_CALLOUT_BEGIN ();
   ret = [GST_AVF_VIDEO_SRC_IMPL (basesrc) unlockStop];
-  OBJC_CALLOUT_END ();
 
   return ret;
 }
@@ -1407,9 +1561,7 @@ gst_avf_video_src_create (GstPushSrc * pushsrc, GstBuffer ** buf)
 {
   GstFlowReturn ret;
 
-  OBJC_CALLOUT_BEGIN ();
   ret = [GST_AVF_VIDEO_SRC_IMPL (pushsrc) create: buf];
-  OBJC_CALLOUT_END ();
 
   return ret;
 }
@@ -1420,9 +1572,7 @@ gst_avf_video_src_fixate (GstBaseSrc * bsrc, GstCaps * caps)
 {
   GstCaps *ret;
 
-  OBJC_CALLOUT_BEGIN ();
   ret = [GST_AVF_VIDEO_SRC_IMPL (bsrc) fixate:caps];
-  OBJC_CALLOUT_END ();
 
   return ret;
 }
@@ -1433,9 +1583,7 @@ gst_avf_video_src_decide_allocation (GstBaseSrc * bsrc,
 {
   gboolean ret;
 
-  OBJC_CALLOUT_BEGIN ();
   ret = [GST_AVF_VIDEO_SRC_IMPL (bsrc) decideAllocation:query];
-  OBJC_CALLOUT_END ();
 
   return ret;
 }
@@ -1443,7 +1591,5 @@ gst_avf_video_src_decide_allocation (GstBaseSrc * bsrc,
 static void
 gst_avf_video_src_set_context (GstElement * element, GstContext * context)
 {
-  OBJC_CALLOUT_BEGIN ();
   [GST_AVF_VIDEO_SRC_IMPL (element) setContext:context];
-  OBJC_CALLOUT_END ();
 }

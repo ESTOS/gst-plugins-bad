@@ -2,8 +2,6 @@
 aiffparse
 asfmux
 assrender
-audiointerleave
-audiomixer
 autoconvert
 autovideoconvert
 baseaudiovisualizer
@@ -15,9 +13,9 @@ curlftpsink
 curlsftpsink
 curlhttpsink
 curlsmtpsink
-dash_mpd
 dash_demux
-dataurisrc
+dash_mpd
+dtls
 faac
 faad
 gdpdepay
@@ -46,15 +44,17 @@ neonhttpsrc
 netsim
 ofa
 pcapparse
+rawaudioparse
+rawvideoparse
 rtponvif
 rganalysis
 rglimiter
 rgvolume
 rtponvifparse
 rtponviftimestamp
-schroenc
 shm
 spectrum
+srtp
 templatematch
 timidity
 y4menc
@@ -63,5 +63,6 @@ videorecordingbin
 viewfinderbin
 voaacenc
 voamrwbenc
+webrtcbin
 x265enc
 zbar

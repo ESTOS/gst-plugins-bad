@@ -30,6 +30,8 @@ G_BEGIN_DECLS
 typedef struct _GstAdaptiveDemuxTestEngine GstAdaptiveDemuxTestEngine;
 
 typedef struct _GstAdaptiveDemuxTestOutputStream {
+  gchar *name;
+
   /* the GstAppSink element getting the data for this stream */
   GstAppSink *appsink;
   GstPad *pad;
@@ -71,7 +73,7 @@ typedef struct _GstAdaptiveDemuxTestCallbacks
    * @stream: #GstAdaptiveDemuxTestOutputStream
    * @buffer: the #GstBuffer that was recevied by #GstAppSink
    * @user_data: the user_data passed to gst_adaptive_demux_test_run()
-   * Returns: #TRUE to continue processing, #FALSE to cause EOS
+   * Returns: %TRUE to continue processing, %FALSE to cause EOS
    *
    * Can be used by a test to perform additional operations (eg validate
    * output data)
@@ -136,6 +138,17 @@ typedef struct _GstAdaptiveDemuxTestCallbacks
       GstBuffer * buffer, gpointer user_data);
 
   /**
+   * demux_sent_event: called each time the demux sends event to AppSink
+   * @engine: #GstAdaptiveDemuxTestEngine
+   * @stream: #GstAdaptiveDemuxTestOutputStream
+   * @event: the #GstEvent that was sent by demux
+   * @user_data: the user_data passed to gst_adaptive_demux_test_run()
+   */
+  gboolean (*demux_sent_event) (GstAdaptiveDemuxTestEngine *engine,
+      GstAdaptiveDemuxTestOutputStream * stream,
+      GstEvent * event, gpointer user_data);
+
+  /**
    * bus_error_message: called if an error is posted to the bus
    * @engine: #GstAdaptiveDemuxTestEngine
    * @msg: the #GstMessage that contains the error
@@ -154,6 +167,7 @@ typedef struct _GstAdaptiveDemuxTestCallbacks
 struct _GstAdaptiveDemuxTestEngine
 {
   GstElement *pipeline;
+  GstClock *clock;
   GstElement *demux;
   GstElement *manifest_source;
   GMainLoop *loop;

@@ -32,6 +32,7 @@ struct _GstPlayerStreamInfo
   GstCaps *caps;
   gint stream_index;
   GstTagList  *tags;
+  gchar *stream_id;
 };
 
 struct _GstPlayerStreamInfoClass
@@ -96,7 +97,7 @@ struct _GstPlayerMediaInfo
   gchar *uri;
   gchar *title;
   gchar *container;
-  gboolean seekable;
+  gboolean seekable, is_live;
   GstTagList *tags;
   GstSample *image_sample;
 

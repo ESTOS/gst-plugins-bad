@@ -23,6 +23,7 @@
 
 /**
  * SECTION:gstvp8parser
+ * @title: GstVp8Parser
  * @short_description: Convenience library for parsing vp8 video bitstream.
  *
  * For more details about the structures, you can refer to the
@@ -38,7 +39,7 @@
 #include "gstvp8rangedecoder.h"
 #include "vp8utils.h"
 
-GST_DEBUG_CATEGORY (vp8_parser_debug);
+GST_DEBUG_CATEGORY_STATIC (vp8_parser_debug);
 #define GST_CAT_DEFAULT vp8_parser_debug
 
 #define INITIALIZE_DEBUG_CATEGORY ensure_debug_category ()
@@ -547,7 +548,7 @@ gst_vp8_parser_parse_frame_header (GstVp8Parser * parser,
 
   data += frame_hdr->data_chunk_size;
   size -= frame_hdr->data_chunk_size;
-  if (!gst_vp8_range_decoder_init (&rd, data, frame_hdr->first_part_size))
+  if (!gst_vp8_range_decoder_init (&rd, data, size))
     return GST_VP8_PARSER_BROKEN_DATA;
 
   result = parse_frame_header (parser, &rd, frame_hdr);

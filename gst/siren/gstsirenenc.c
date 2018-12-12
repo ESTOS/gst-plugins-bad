@@ -21,6 +21,7 @@
  */
 /**
  * SECTION:element-sirenenc
+ * @title: sirenenc
  *
  * This encodes audio buffers into the Siren 16 codec (a 16khz extension of
  * G.722.1) that is meant to be compatible with the Microsoft Windows Live
@@ -71,10 +72,8 @@ gst_siren_enc_class_init (GstSirenEncClass * klass)
 
   GST_DEBUG_CATEGORY_INIT (sirenenc_debug, "sirenenc", 0, "sirenenc");
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&srctemplate));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sinktemplate));
+  gst_element_class_add_static_pad_template (element_class, &srctemplate);
+  gst_element_class_add_static_pad_template (element_class, &sinktemplate);
 
   gst_element_class_set_static_metadata (element_class, "Siren Encoder element",
       "Codec/Encoder/Audio ",

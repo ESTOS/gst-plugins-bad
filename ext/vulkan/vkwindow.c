@@ -19,7 +19,7 @@
  */
 
 /**
- * SECTION:gstglwindow
+ * SECTION:vkwindow
  * @short_description: window/surface abstraction
  * @title: GstVulkanWindow
  * @see_also: #GstGLContext, #GstGLDisplay
@@ -42,6 +42,9 @@
 #endif
 #if GST_VULKAN_HAVE_WINDOW_XCB
 #include "xcb/vkwindow_xcb.h"
+#endif
+#if GST_VULKAN_HAVE_WINDOW_WAYLAND
+#include "wayland/vkwindow_wayland.h"
 #endif
 
 #define GST_CAT_DEFAULT gst_vulkan_window_debug
@@ -183,6 +186,10 @@ gst_vulkan_window_new (GstVulkanDisplay * display)
   if (!window && (!user_choice || g_strstr_len (user_choice, 3, "xcb")))
     window = GST_VULKAN_WINDOW (gst_vulkan_window_xcb_new (display));
 #endif
+#if GST_VULKAN_HAVE_WINDOW_WAYLAND
+  if (!window && (!user_choice || g_strstr_len (user_choice, 7, "wayland")))
+    window = GST_VULKAN_WINDOW (gst_vulkan_window_wayland_new (display));
+#endif
   if (!window) {
     /* subclass returned a NULL window */
     GST_WARNING ("Could not create window. user specified %s, creating dummy"
@@ -219,9 +226,9 @@ gst_vulkan_window_get_surface (GstVulkanWindow * window, GError ** error)
 {
   GstVulkanWindowClass *klass;
 
-  g_return_val_if_fail (GST_IS_VULKAN_WINDOW (window), NULL);
+  g_return_val_if_fail (GST_IS_VULKAN_WINDOW (window), (VkSurfaceKHR) 0);
   klass = GST_VULKAN_WINDOW_GET_CLASS (window);
-  g_return_val_if_fail (klass->get_surface != NULL, NULL);
+  g_return_val_if_fail (klass->get_surface != NULL, (VkSurfaceKHR) 0);
 
   return klass->get_surface (window, error);
 }
@@ -304,5 +311,10 @@ gst_vulkan_dummy_window_init (GstVulkanDummyWindow * dummy)
 GstVulkanDummyWindow *
 gst_vulkan_dummy_window_new (void)
 {
-  return g_object_new (gst_vulkan_dummy_window_get_type (), NULL);
+  GstVulkanDummyWindow *window;
+
+  window = g_object_new (gst_vulkan_dummy_window_get_type (), NULL);
+  gst_object_ref_sink (window);
+
+  return window;
 }

@@ -23,6 +23,7 @@
 
 /**
  * SECTION:element-uvch264-src
+ * @title: uvch264-src
  *
  * A camera bin src element that wraps v4l2src and implements UVC H264
  * Extension Units (XU) to control the H264 encoder in the camera
@@ -281,14 +282,11 @@ gst_uvc_h264_src_class_init (GstUvcH264SrcClass * klass)
       "UVC H264 Encoding camera source",
       "Youness Alaoui <youness.alaoui@collabora.co.uk>");
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&vidsrc_template));
-
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&imgsrc_template));
-
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&vfsrc_template));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &vidsrc_template);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &imgsrc_template);
+  gst_element_class_add_static_pad_template (gstelement_class, &vfsrc_template);
 
   /* Properties */
   g_object_class_install_property (gobject_class, PROP_COLORSPACE_NAME,
@@ -755,8 +753,9 @@ gst_uvc_h264_src_get_property (GObject * object,
     case PROP_LEAKY_BUCKET_SIZE:
       fill_probe_commit (self, &probe, 0, 0, 0, 0, 0);
       if (GST_STATE (self) >= GST_STATE_PAUSED) {
-        xu_query (self, UVCX_VIDEO_CONFIG_PROBE, UVC_GET_CUR,
-            (guchar *) & probe);
+        if (!xu_query (self, UVCX_VIDEO_CONFIG_PROBE, UVC_GET_CUR,
+                (guchar *) & probe))
+          GST_WARNING_OBJECT (self, "probe_setting GET_CUR error");
       }
       break;
     default:
@@ -1325,7 +1324,11 @@ gst_uvc_h264_src_get_enum_setting (GstUvcH264Src * self, gchar * property,
       *default_value = def;
       *mask = 0;
 
-      xu_query (self, UVCX_RATE_CONTROL_MODE, UVC_GET_CUR, (guchar *) & cur);
+      if (!xu_query (self, UVCX_RATE_CONTROL_MODE, UVC_GET_CUR,
+              (guchar *) & cur)) {
+        GST_WARNING_OBJECT (self, " CONTROL_MODE GET_CUR error");
+        return FALSE;
+      }
 
       for (en = min; en <= max; en++) {
         uvcx_rate_control_mode_t req = { 0, en };
@@ -1336,7 +1339,11 @@ gst_uvc_h264_src_get_enum_setting (GstUvcH264Src * self, gchar * property,
                 (guchar *) & req) && req.bRateControlMode == en)
           *mask |= (1 << en);
       }
-      xu_query (self, UVCX_RATE_CONTROL_MODE, UVC_SET_CUR, (guchar *) & cur);
+      if (!xu_query (self, UVCX_RATE_CONTROL_MODE, UVC_SET_CUR,
+              (guchar *) & cur)) {
+        GST_WARNING_OBJECT (self, " CONTROL_MODE SET_CUR error");
+        return FALSE;
+      }
     }
   }
 
@@ -1596,7 +1603,7 @@ gst_uvc_h264_src_buffer_probe (GstPad * pad, GstPadProbeInfo * info,
           GST_TIME_FORMAT, all_headers, count, GST_TIME_ARGS (ts),
           GST_TIME_ARGS (running_time), GST_TIME_ARGS (stream_time));
       downstream = gst_video_event_new_downstream_force_key_unit (ts,
-          running_time, stream_time, all_headers, count);
+          stream_time, running_time, all_headers, count);
       gst_pad_push_event (self->vidsrc, downstream);
       gst_event_replace (&self->key_unit_event, NULL);
     }
@@ -2537,6 +2544,8 @@ error_remove:
   gst_bin_remove (GST_BIN (self), self->v4l2_src);
 
 error:
+  if (v4l2_clock)
+    gst_object_unref (v4l2_clock);
   if (self->v4l2_src)
     gst_object_unref (self->v4l2_src);
   self->v4l2_src = NULL;

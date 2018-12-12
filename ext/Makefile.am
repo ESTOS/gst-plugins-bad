@@ -4,16 +4,16 @@ else
 ASSRENDER_DIR =
 endif
 
+if USE_AOM
+AOM_DIR= aom
+else
+AOM_DIR=
+endif
+
 if USE_VOAMRWBENC
 VOAMRWBENC_DIR = voamrwbenc
 else
 VOAMRWBENC_DIR =
-endif
-
-if USE_APEXSINK
-APEXSINK_DIR = apexsink
-else
-APEXSINK_DIR =
 endif
 
 if USE_BS2B
@@ -26,6 +26,12 @@ if USE_BZ2
 BZ2_DIR=bz2
 else
 BZ2_DIR=
+endif
+
+if USE_LCMS2
+COLORMANAGEMENT_DIR=colormanagement
+else
+COLORMANAGEMENT_DIR=
 endif
 
 if USE_CHROMAPRINT
@@ -82,18 +88,6 @@ else
 GL_DIR=
 endif
 
-if USE_GTK3
-GTK3_DIR=gtk
-else
-GTK3_DIR=
-endif
-
-if USE_QT
-QT_DIR=qt
-else
-QT_DIR=
-endif
-
 if USE_RESINDVD
  RESINDVD_DIR = resindvd
 else
@@ -110,6 +104,12 @@ if USE_FAAD
  FAAD_DIR=faad
 else
  FAAD_DIR=
+endif
+
+if USE_FDK_AAC
+ FDK_AAC_DIR=fdkaac
+else
+ FDK_AAC_DIR=
 endif
 
 if USE_VOAACENC
@@ -134,6 +134,12 @@ if USE_GSM
 GSM_DIR=gsm
 else
 GSM_DIR=
+endif
+
+if USE_IQA
+IQA_DIR = iqa
+else
+IQA_DIR =
 endif
 
 if USE_KATE
@@ -166,12 +172,6 @@ else
 LIBMMS_DIR=
 endif
 
-if USE_LIBVISUAL
-LIBVISUAL_DIR=libvisual
-else
-LIBVISUAL_DIR=
-endif
-
 if USE_MODPLUG
 MODPLUG_DIR=modplug
 else
@@ -184,12 +184,6 @@ else
 MPEG2ENC_DIR=
 endif
 
-if USE_MIMIC
-MIMIC_DIR=mimic
-else
-MIMIC_DIR=
-endif
-
 if USE_MPLEX
 MPLEX_DIR=mplex
 else
@@ -200,12 +194,6 @@ if USE_MUSEPACK
 MUSEPACK_DIR=musepack
 else
 MUSEPACK_DIR=
-endif
-
-if USE_NAS
-NAS_DIR=nas
-else
-NAS_DIR=
 endif
 
 if USE_NEON
@@ -244,6 +232,12 @@ else
 OPENH264_DIR =
 endif
 
+if USE_OPENMPT
+OPENMPT_DIR=openmpt
+else
+OPENMPT_DIR=
+endif
+
 if USE_OPENNI2
 OPENNI2_DIR=openni2
 else
@@ -268,18 +262,12 @@ else
 RSVG_DIR=
 endif
 
-if USE_TIMIDITY
-TIMIDITY_DIR=timidity
-endif
-
 if USE_WILDMIDI
-TIMIDITY_DIR=timidity
+WILDMIDI_DIR=wildmidi
 endif
 
 if !USE_WILDMIDI
-if !USE_TIMIDITY
-TIMIDITY_DIR=
-endif
+WILDMIDI_DIR=
 endif
 
 if USE_FLUIDSYNTH
@@ -290,18 +278,6 @@ if USE_SBC
 SBC_DIR=sbc
 else
 SBC_DIR=
-endif
-
-if USE_SCHRO
-SCHRO_DIR=schroedinger
-else
-SCHRO_DIR=
-endif
-
-if USE_SDL
-SDL_DIR=sdl
-else
-SDL_DIR=
 endif
 
 if USE_SMOOTHSTREAMING
@@ -322,12 +298,6 @@ else
 SNDFILE_DIR=
 endif
 
-if USE_SNDIO
-SNDIO_DIR = sndio
-else
-SNDIO_DIR =
-endif
-
 if USE_SOUNDTOUCH
 SOUNDTOUCH_DIR=soundtouch
 else
@@ -346,6 +316,12 @@ else
 SPC_DIR=
 endif
 
+if USE_SRT
+SRT_DIR=srt
+else
+SRT_DIR=
+endif
+
 if USE_SRTP
 SRTP_DIR=srtp
 else
@@ -362,12 +338,6 @@ if USE_TELETEXTDEC
 TELETEXTDEC_DIR=teletextdec
 else
 TELETEXTDEC_DIR=
-endif
-
-if USE_XVID
-XVID_DIR=xvid
-else
-XVID_DIR=
 endif
 
 if USE_ZBAR
@@ -412,14 +382,33 @@ else
 VULKAN_DIR=
 endif
 
+if USE_WEBRTCDSP
+WEBRTCDSP_DIR=webrtcdsp
+else
+WEBRTCDSP_DIR=
+endif
+
+if USE_WEBRTC
+WEBRTC_DIR=webrtc
+else
+WEBRTC_DIR=
+endif
+
+if USE_TTML
+TTML_DIR=ttml
+else
+TTML_DIR=
+endif
+
 SUBDIRS=\
 	$(VOAACENC_DIR) \
 	$(ASSRENDER_DIR) \
+	$(AOM_DIR) \
 	$(VOAMRWBENC_DIR) \
-	$(APEXSINK_DIR) \
 	$(AUDIOFILE_DIR) \
 	$(BS2B_DIR) \
 	$(BZ2_DIR) \
+	$(COLORMANAGEMENT_DIR) \
 	$(CHROMAPRINT_DIR) \
 	$(CURL_DIR) \
 	$(DASH_DIR) \
@@ -430,26 +419,23 @@ SUBDIRS=\
 	$(DTS_DIR) \
 	$(RESINDVD_DIR) \
 	$(GL_DIR) \
-	$(GTK3_DIR) \
-	$(QT_DIR) \
 	$(FAAC_DIR) \
 	$(FAAD_DIR) \
+	$(FDK_AAC_DIR) \
 	$(FLITE_DIR) \
 	$(FLUIDSYNTH_DIR) \
 	$(GSM_DIR) \
 	$(G729_DIR) \
+	$(IQA_DIR) \
 	$(KATE_DIR) \
 	$(LADSPA_DIR) \
 	$(LV2_DIR) \
 	$(LIBDE265_DIR) \
 	$(LIBMMS_DIR) \
-	$(LIBVISUAL_DIR) \
 	$(MODPLUG_DIR) \
 	$(MPEG2ENC_DIR) \
-	$(MIMIC_DIR) \
 	$(MPLEX_DIR) \
 	$(MUSEPACK_DIR) \
-	$(NAS_DIR) \
 	$(NEON_DIR) \
 	$(OFA_DIR) \
 	$(OPENAL_DIR) \
@@ -457,37 +443,39 @@ SUBDIRS=\
 	$(OPENEXR_DIR) \
 	$(OPENH264_DIR) \
 	$(OPENJPEG_DIR) \
+	$(OPENMPT_DIR) \
 	$(OPENNI2_DIR) \
 	$(OPUS_DIR) \
 	$(RSVG_DIR) \
 	$(SBC_DIR) \
-	$(SCHRO_DIR) \
-	$(SDL_DIR) \
 	$(SMOOTHSTREAMING_DIR) \
 	$(SMOOTHWAVE_DIR) \
 	$(SNDFILE_DIR) \
-	$(SNDIO_DIR) \
 	$(SOUNDTOUCH_DIR) \
 	$(SPANDSP_DIR) \
 	$(GME_DIR) \
 	$(SPC_DIR) \
+	$(SRT_DIR) \
 	$(SRTP_DIR) \
 	$(TELETEXTDEC_DIR) \
-	$(TIMIDITY_DIR) \
-	$(XVID_DIR) \
+	$(WILDMIDI_DIR) \
 	$(ZBAR_DIR) \
 	$(RTMP_DIR) \
 	$(HLS_DIR) \
 	$(WEBP_DIR) \
 	$(X265_DIR) \
 	$(DTLS_DIR) \
-	$(VULKAN_DIR)
+	$(VULKAN_DIR) \
+	$(WEBRTCDSP_DIR) \
+	$(TTML_DIR) \
+	$(WEBRTC_DIR)
 
 DIST_SUBDIRS = \
 	assrender \
-	apexsink \
+	aom \
 	bs2b \
 	bz2 \
+	colormanagement \
 	chromaprint \
 	curl \
 	dash \
@@ -496,59 +484,57 @@ DIST_SUBDIRS = \
 	wayland \
 	faac \
 	faad \
+	fdkaac \
 	flite \
 	fluidsynth \
 	gsm \
 	hls \
+	iqa \
 	ladspa \
 	kate \
 	libde265 \
 	libmms \
-	libvisual \
 	lv2 \
 	daala \
 	dts \
 	gl \
-	gtk \
-	qt \
 	modplug \
-	mimic \
 	mpeg2enc \
 	mplex \
 	musepack \
-	nas \
 	neon \
 	ofa \
 	openal \
 	opencv \
 	openexr \
 	openh264 \
+	openmpt \
 	openni2 \
 	openjpeg \
 	opus \
 	rsvg \
 	resindvd \
 	sbc \
-	schroedinger \
-	sdl \
 	smoothstreaming \
 	sndfile \
-	sndio \
 	soundtouch \
 	spandsp \
 	spc \
+	srt \
 	srtp \
 	gme \
 	teletextdec \
-	timidity \
+	wildmidi \
 	voaacenc \
 	voamrwbenc \
-	xvid \
 	zbar \
 	rtmp \
 	webp \
 	x265 \
 	dtls \
-	vulkan
+	vulkan \
+	webrtcdsp \
+	ttml \
+	webrtc
 
 include $(top_srcdir)/common/parallel-subdirs.mak

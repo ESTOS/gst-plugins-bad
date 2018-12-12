@@ -18,13 +18,13 @@
  */
 /**
  * SECTION:element-gstinteraudiosink
+ * @title: gstinteraudiosink
  *
  * The interaudiosink element is an audio sink element.  It is used
  * in connection with a interaudiosrc element in a different pipeline,
  * similar to intervideosink and intervideosrc.
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 -v audiotestsrc ! queue ! interaudiosink
  * ]|
@@ -34,7 +34,7 @@
  * audio.
  * See the gstintertest.c example in the gst-plugins-bad source code for
  * more details.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -99,8 +99,8 @@ gst_inter_audio_sink_class_init (GstInterAudioSinkClass * klass)
 
   GST_DEBUG_CATEGORY_INIT (gst_inter_audio_sink_debug_category,
       "interaudiosink", 0, "debug category for interaudiosink element");
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_inter_audio_sink_sink_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_inter_audio_sink_sink_template);
 
   gst_element_class_set_static_metadata (element_class,
       "Internal audio sink",

@@ -6,7 +6,10 @@ libgstopusparse_la_CFLAGS = \
 	$(GST_PLUGINS_BAD_CFLAGS) \
 	$(GST_PLUGINS_BASE_CFLAGS) \
 	$(GST_CFLAGS) \
-	$(OPUS_CFLAGS)
+	$(OPUS_CFLAGS) \
+	-Dgst_opus_header_is_header=gst_opus_bad_header_is_header \
+	-Dgst_opus_header_is_id_header=gst_opus_bad_header_is_id_header \
+	-Dgst_opus_header_is_comment_header=gst_opus_bad_header_is_comment_header
 libgstopusparse_la_LIBADD = \
 	$(GST_PLUGINS_BASE_LIBS) -lgstaudio-$(GST_API_VERSION) \
 	-lgsttag-$(GST_API_VERSION) \
@@ -15,6 +18,5 @@ libgstopusparse_la_LIBADD = \
 	$(GST_LIBS) \
 	$(OPUS_LIBS)
 libgstopusparse_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS) $(LIBM)
-libgstopusparse_la_LIBTOOLFLAGS = $(GST_PLUGIN_LIBTOOLFLAGS)
 
 noinst_HEADERS = gstopusparse.h gstopusheader.h

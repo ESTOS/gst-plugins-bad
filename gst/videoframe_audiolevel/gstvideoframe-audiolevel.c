@@ -24,16 +24,16 @@
 
 /**
  * SECTION:element-videoframe-audiolevel
+ * @title: videoframe-audiolevel
  *
  * This element acts like a synchronized audio/video "level". It gathers
  * all audio buffers sent between two video frames, and then sends a message
  * that contains the RMS value of all samples for these buffers.
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 -m filesrc location="file.mkv" ! decodebin name=d ! "audio/x-raw" ! videoframe-audiolevel name=l ! autoaudiosink d. ! "video/x-raw" ! l. l. ! queue ! autovideosink ]|
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -122,15 +122,15 @@ gst_videoframe_audiolevel_class_init (GstVideoFrameAudioLevelClass * klass)
   gobject_class->finalize = gst_videoframe_audiolevel_finalize;
   gstelement_class->change_state = gst_videoframe_audiolevel_change_state;
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&audio_src_template));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&audio_sink_template));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &audio_src_template);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &audio_sink_template);
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&video_src_template));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&video_sink_template));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &video_src_template);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &video_sink_template);
 }
 
 static void

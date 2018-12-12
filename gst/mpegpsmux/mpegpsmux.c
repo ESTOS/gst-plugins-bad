@@ -127,10 +127,10 @@ mpegpsmux_class_init (MpegPsMuxClass * klass)
           "Whether to aggregate GOPs and push them out as buffer lists",
           DEFAULT_AGGREGATE_GOPS, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&mpegpsmux_sink_factory));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&mpegpsmux_src_factory));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &mpegpsmux_sink_factory);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &mpegpsmux_src_factory);
 
   gst_element_class_set_static_metadata (gstelement_class,
       "MPEG Program Stream Muxer", "Codec/Muxer",
@@ -229,7 +229,6 @@ mpegpsmux_create_stream (MpegPsMux * mux, MpegPsPadData * ps_data, GstPad * pad)
   }
 
   s = gst_caps_get_structure (caps, 0);
-  g_return_val_if_fail (s != NULL, FALSE);
 
   if (gst_structure_has_name (s, "video/x-dirac")) {
     GST_DEBUG_OBJECT (pad, "Creating Dirac stream");
@@ -341,6 +340,7 @@ mpegpsmux_create_stream (MpegPsMux * mux, MpegPsPadData * ps_data, GstPad * pad)
   }
 
 beach:
+  gst_caps_unref (caps);
   return ret;
 }
 
@@ -650,9 +650,9 @@ mpegpsmux_release_pad (GstElement * element, GstPad * pad)
       gst_buffer_unref (pad_data->codec_data);
       pad_data->codec_data = NULL;
     }
+    if (pad_data->stream_id == mux->video_stream_id)
+      mux->video_stream_id = 0;
   }
-  if (pad_data->stream_id == mux->video_stream_id)
-    mux->video_stream_id = 0;
   GST_OBJECT_UNLOCK (pad);
 
   gst_collect_pads_remove_pad (mux->collect, pad);

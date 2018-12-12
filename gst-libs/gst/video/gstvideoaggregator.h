@@ -29,12 +29,14 @@
 #include <gst/gst.h>
 #include <gst/video/video.h>
 #include <gst/base/gstaggregator.h>
+#include <gst/video/video-bad-prelude.h>
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_VIDEO_AGGREGATOR (gst_videoaggregator_get_type())
+#define GST_TYPE_VIDEO_AGGREGATOR (gst_video_aggregator_get_type())
 #define GST_VIDEO_AGGREGATOR(obj) \
         (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_VIDEO_AGGREGATOR, GstVideoAggregator))
+#define GST_VIDEO_AGGREGATOR_CAST(obj) ((GstVideoAggregator *)(obj))
 #define GST_VIDEO_AGGREGATOR_CLASS(klass) \
         (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_VIDEO_AGGREGATOR, GstVideoAggregatorClass))
 #define GST_IS_VIDEO_AGGREGATOR(obj) \
@@ -73,9 +75,6 @@ struct _GstVideoAggregator
  * @update_caps:              Optional.
  *                            Lets subclasses update the #GstCaps representing
  *                            the src pad caps before usage.  Return %NULL to indicate failure.
- * @fixate_caps:              Fixate and return the src pad caps provided.  The function takes
- *                            ownership of @caps and returns a fixated version of
- *                            @caps. @caps is not guaranteed to be writable.
  * @aggregate_frames:         Lets subclasses aggregate frames that are ready. Subclasses
  *                            should iterate the GstElement.sinkpads and use the already
  *                            mapped #GstVideoFrame from GstVideoAggregatorPad.aggregated_frame
@@ -97,16 +96,11 @@ struct _GstVideoAggregatorClass
 
   /*< public >*/
   GstCaps *          (*update_caps)               (GstVideoAggregator *  videoaggregator,
-                                                   GstCaps            *  caps,
-                                                   GstCaps            *  filter_caps);
-  GstCaps *          (*fixate_caps)               (GstVideoAggregator *  videoaggregator,
                                                    GstCaps            *  caps);
   GstFlowReturn      (*aggregate_frames)          (GstVideoAggregator *  videoaggregator,
                                                    GstBuffer          *  outbuffer);
   GstFlowReturn      (*get_output_buffer)         (GstVideoAggregator *  videoaggregator,
                                                    GstBuffer          ** outbuffer);
-  gboolean           (*negotiated_caps)           (GstVideoAggregator *  videoaggregator,
-                                                   GstCaps            *  caps);
   void               (*find_best_format)          (GstVideoAggregator *  vagg,
                                                    GstCaps            *  downstream_caps,
                                                    GstVideoInfo       *  best_info,
@@ -118,7 +112,8 @@ struct _GstVideoAggregatorClass
   gpointer            _gst_reserved[GST_PADDING_LARGE];
 };
 
-GType gst_videoaggregator_get_type       (void);
+GST_VIDEO_BAD_API
+GType gst_video_aggregator_get_type       (void);
 
 G_END_DECLS
 #endif /* __GST_VIDEO_AGGREGATOR_H__ */

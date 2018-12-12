@@ -22,20 +22,20 @@
 
 /**
  * SECTION:element-jifmux
+ * @title: jifmux
  * @short_description: JPEG interchange format writer
  *
  * Writes a JPEG image as JPEG/EXIF or JPEG/JFIF including various metadata. The
  * jpeg image received on the sink pad should be minimal (e.g. should not
  * contain metadata already).
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 -v videotestsrc num-buffers=1 ! jpegenc ! jifmux ! filesink location=...
  * ]|
  * The above pipeline renders a frame, encodes to jpeg, adds metadata and writes
  * it to disk.
- * </refsect2>
+ *
  */
 /*
 jpeg interchange format:
@@ -136,10 +136,10 @@ gst_jif_mux_class_init (GstJifMuxClass * klass)
 
   gstelement_class->change_state = GST_DEBUG_FUNCPTR (gst_jif_mux_change_state);
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_jif_mux_src_pad_template));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_jif_mux_sink_pad_template));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &gst_jif_mux_src_pad_template);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &gst_jif_mux_sink_pad_template);
 
   gst_element_class_set_static_metadata (gstelement_class,
       "JPEG stream muxer",

@@ -155,8 +155,10 @@ gst_vdp_sink_window_set_title (VdpSink * vdp_sink,
 
       if (title) {
         if ((XStringListToTextProperty (((char **) &title), 1,
-                    &xproperty)) != 0)
+                    &xproperty)) != 0) {
           XSetWMName (vdp_sink->device->display, window->win, &xproperty);
+          XFree (xproperty.value);
+        }
 
         g_free (title_mem);
       }
@@ -852,8 +854,8 @@ gst_vdp_sink_show_frame (GstBaseSink * bsink, GstBuffer * outbuf)
 
     g_mutex_lock (vdp_sink->x_lock);
     status =
-        device->vdp_presentation_queue_query_surface_status (vdp_sink->
-        window->queue, surface, &queue_status, &pres_time);
+        device->vdp_presentation_queue_query_surface_status (vdp_sink->window->
+        queue, surface, &queue_status, &pres_time);
     g_mutex_unlock (vdp_sink->x_lock);
 
     if (queue_status == VDP_PRESENTATION_QUEUE_STATUS_QUEUED) {
@@ -1390,8 +1392,7 @@ gst_vdp_sink_base_init (gpointer g_class)
       "Sink/Video",
       "VDPAU Sink", "Carl-Anton Ingmarsson <ca.ingmarsson@gmail.com>");
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sink_template));
+  gst_element_class_add_static_pad_template (element_class, &sink_template);
 }
 
 static void

@@ -21,16 +21,16 @@
 
 /**
  * SECTION:element-glbumper
+ * @title: glbumper
  *
  * Bump mapping using the normal method.
  *
- * <refsect2>
- * <title>Examples</title>
+ * ## Examples
  * |[
  * gst-launch-1.0 -v videotestsrc ! glupload ! glbumper location=normalmap.bmp ! glimagesink
  * ]| A pipeline to test normal mapping.
  * FBO (Frame Buffer Object) and GLSL (OpenGL Shading Language) are required.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -279,6 +279,8 @@ gst_gl_bumper_class_init (GstGLBumperClass * klass)
   element_class = GST_ELEMENT_CLASS (klass);
   gobject_class->set_property = gst_gl_bumper_set_property;
   gobject_class->get_property = gst_gl_bumper_get_property;
+
+  gst_gl_filter_add_rgba_pad_templates (GST_GL_FILTER_CLASS (klass));
 
   GST_GL_FILTER_CLASS (klass)->filter_texture = gst_gl_bumper_filter_texture;
   GST_GL_FILTER_CLASS (klass)->display_init_cb = gst_gl_bumper_init_resources;

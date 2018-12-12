@@ -23,6 +23,7 @@
 
 /**
  * SECTION:element-daaladec
+ * @title: daaladec
  * @see_also: daalaenc, oggdemux
  *
  * This element decodes daala streams into raw video
@@ -30,13 +31,12 @@
  * video codec maintained by the <ulink url="http://www.xiph.org/">Xiph.org
  * Foundation</ulink>.
  *
- * <refsect2>
- * <title>Example pipeline</title>
+ * ## Example pipeline
  * |[
  * gst-launch-1.0 -v filesrc location=videotestsrc.ogg ! oggdemux ! daaladec ! xvimagesink
  * ]| This example pipeline will decode an ogg stream and decodes the daala video. Refer to
  * the daalaenc example to create the ogg file.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -103,13 +103,12 @@ gst_daala_dec_class_init (GstDaalaDecClass * klass)
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
   GstVideoDecoderClass *video_decoder_class = GST_VIDEO_DECODER_CLASS (klass);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&daala_dec_src_factory));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&daala_dec_sink_factory));
-  gst_element_class_set_static_metadata (element_class,
-      "Daala video decoder", "Codec/Decoder/Video",
-      "Decode raw Daala streams to raw YUV video",
+  gst_element_class_add_static_pad_template (element_class,
+      &daala_dec_src_factory);
+  gst_element_class_add_static_pad_template (element_class,
+      &daala_dec_sink_factory);
+  gst_element_class_set_static_metadata (element_class, "Daala video decoder",
+      "Codec/Decoder/Video", "Decode raw Daala streams to raw YUV video",
       "Sebastian Dröge <slomo@circular-chaos.org>");
 
   video_decoder_class->start = GST_DEBUG_FUNCPTR (daala_dec_start);
@@ -122,7 +121,7 @@ gst_daala_dec_class_init (GstDaalaDecClass * klass)
       GST_DEBUG_FUNCPTR (daala_dec_decide_allocation);
 
   GST_DEBUG_CATEGORY_INIT (daaladec_debug, "daaladec", 0, "Daala decoder");
-  GST_DEBUG_CATEGIRY_GET (CAT_PERFORMANCE, "GST_PERFORMANCE");
+  GST_DEBUG_CATEGORY_GET (CAT_PERFORMANCE, "GST_PERFORMANCE");
 }
 
 static void

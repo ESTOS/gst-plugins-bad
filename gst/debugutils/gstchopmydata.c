@@ -18,26 +18,25 @@
  */
 /**
  * SECTION:element-gstchopmydata
+ * @title: gstchopmydata
  *
  * The chopmydata element takes an incoming stream and chops it up
  * into randomly sized buffers.  Size of outgoing buffers are determined
  * by the max-size, min-size, and step-size properties.
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 -v audiotestsrc num-buffers=10 ! chopmydata min-size=100
  * max-size=200 step-size=2 ! fakesink -v
  * ]|
- * 
+ *
  * This pipeline will create 10 buffers that are by default 2048 bytes
  * each (1024 samples each), and chop them up into buffers that range
  * in size from 100 bytes to 200 bytes, with the restriction that sizes
  * are a multiple of 2.  This restriction is important, because the
  * default sample size for audiotestsrc is 2 bytes (one channel, 16-bit
  * audio).
- * 
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -121,10 +120,10 @@ gst_chop_my_data_class_init (GstChopMyDataClass * klass)
           "Step increment for random buffer sizes", 1, G_MAXINT,
           DEFAULT_MAX_SIZE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_chop_my_data_src_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_chop_my_data_sink_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_chop_my_data_src_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_chop_my_data_sink_template);
 
   gst_element_class_set_static_metadata (element_class, "FIXME",
       "Generic", "FIXME", "David Schleef <ds@schleef.org>");

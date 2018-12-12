@@ -485,10 +485,10 @@ acmenc_class_init (ACMEncClass * klass)
       g_param_spec_int ("bitrate", "Bitrate", "Bitrate to encode at (in bps)",
           0, 1000000, DEFAULT_BITRATE, G_PARAM_READWRITE));
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&acmenc_sink_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&acmenc_src_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &acmenc_sink_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &acmenc_src_template);
   params =
       (ACMEncParams *) g_type_get_qdata (G_OBJECT_CLASS_TYPE (klass),
       ACMENC_PARAMS_QDATA);
@@ -640,5 +640,5 @@ plugin_init (GstPlugin * plugin)
 }
 
 GST_PLUGIN_DEFINE (GST_VERSION_MAJOR, GST_VERSION_MINOR, acmenc,
-    "ACM Encoder wrapper", plugin_init, VERSION, "LGPL", "GStreamer",
-    "http://gstreamer.net/")
+    "ACM Encoder wrapper", plugin_init, VERSION, "LGPL", GST_PACKAGE_NAME,
+    GST_PACKAGE_ORIGIN)

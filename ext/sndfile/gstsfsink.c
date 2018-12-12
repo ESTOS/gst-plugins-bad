@@ -84,8 +84,7 @@ gst_sf_sink_base_init (gpointer g_class)
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
 
   GST_DEBUG_CATEGORY_INIT (gst_sf_debug, "sfsink", 0, "sfsink element");
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sf_sink_factory));
+  gst_element_class_add_static_pad_template (element_class, &sf_sink_factory);
   gst_element_class_set_static_metadata (element_class, "Sndfile sink",
       "Sink/Audio",
       "Write audio streams to disk using libsndfile",
@@ -434,9 +433,7 @@ paused:
     if (result == GST_FLOW_UNEXPECTED) {
       gst_pad_send_event (pad, gst_event_new_eos ());
     } else if (result < GST_FLOW_UNEXPECTED || result == GST_FLOW_NOT_LINKED) {
-      GST_ELEMENT_ERROR (basesink, STREAM, FAILED,
-          (_("Internal data stream error.")),
-          ("stream stopped, reason %s", gst_flow_get_name (result)));
+      GST_ELEMENT_FLOW_ERROR (basesink, result);
       gst_pad_send_event (pad, gst_event_new_eos ());
     }
     gst_object_unref (this);

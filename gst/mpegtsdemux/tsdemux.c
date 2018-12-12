@@ -48,6 +48,7 @@
 #include "pesparse.h"
 #include <gst/codecparsers/gsth264parser.h>
 #include <gst/codecparsers/gstmpegvideoparser.h>
+#include <gst/video/video-color.h>
 
 #include <math.h>
 
@@ -112,6 +113,7 @@ typedef struct
 typedef struct _TSDemuxStream TSDemuxStream;
 
 typedef struct _TSDemuxH264ParsingInfos TSDemuxH264ParsingInfos;
+typedef struct _TSDemuxJP2KParsingInfos TSDemuxJP2KParsingInfos;
 
 /* Returns TRUE if a keyframe was found */
 typedef gboolean (*GstTsDemuxKeyFrameScanFunction) (TSDemuxStream * stream,
@@ -133,6 +135,11 @@ struct _TSDemuxH264ParsingInfos
   SimpleBuffer framedata;
 };
 
+struct _TSDemuxJP2KParsingInfos
+{
+  /* J2K parsing data */
+  gboolean interlace;
+};
 struct _TSDemuxStream
 {
   MpegTSBaseStream stream;
@@ -200,6 +207,7 @@ struct _TSDemuxStream
 
   GstTsDemuxKeyFrameScanFunction scan_function;
   TSDemuxH264ParsingInfos h264infos;
+  TSDemuxJP2KParsingInfos jp2kInfos;
 };
 
 #define VIDEO_CAPS \
@@ -215,8 +223,9 @@ struct _TSDemuxStream
     "video/x-cavs;" \
     "video/x-wmv," \
       "wmvversion = (int) 3, " \
-      "format = (string) WVC1" \
-  )
+      "format = (string) WVC1;" \
+      "image/x-jpc;" \
+)
 
 #define AUDIO_CAPS \
   GST_STATIC_CAPS ( \
@@ -246,24 +255,24 @@ struct _TSDemuxStream
     GST_STATIC_CAPS ("subpicture/x-pgs; subpicture/x-dvd; subpicture/x-dvb")
 
 static GstStaticPadTemplate video_template =
-GST_STATIC_PAD_TEMPLATE ("video_%04x", GST_PAD_SRC,
+GST_STATIC_PAD_TEMPLATE ("video_%01x_%05x", GST_PAD_SRC,
     GST_PAD_SOMETIMES,
     VIDEO_CAPS);
 
 static GstStaticPadTemplate audio_template =
-GST_STATIC_PAD_TEMPLATE ("audio_%04x",
+GST_STATIC_PAD_TEMPLATE ("audio_%01x_%05x",
     GST_PAD_SRC,
     GST_PAD_SOMETIMES,
     AUDIO_CAPS);
 
 static GstStaticPadTemplate subpicture_template =
-GST_STATIC_PAD_TEMPLATE ("subpicture_%04x",
+GST_STATIC_PAD_TEMPLATE ("subpicture_%01x_%05x",
     GST_PAD_SRC,
     GST_PAD_SOMETIMES,
     SUBPICTURE_CAPS);
 
 static GstStaticPadTemplate private_template =
-GST_STATIC_PAD_TEMPLATE ("private_%04x",
+GST_STATIC_PAD_TEMPLATE ("private_%01x_%05x",
     GST_PAD_SRC,
     GST_PAD_SOMETIMES,
     GST_STATIC_CAPS_ANY);
@@ -281,6 +290,8 @@ enum
 
 /* mpegtsbase methods */
 static void
+gst_ts_demux_update_program (MpegTSBase * base, MpegTSBaseProgram * program);
+static void
 gst_ts_demux_program_started (MpegTSBase * base, MpegTSBaseProgram * program);
 static void
 gst_ts_demux_program_stopped (MpegTSBase * base, MpegTSBaseProgram * program);
@@ -293,7 +304,7 @@ gst_ts_demux_push (MpegTSBase * base, MpegTSPacketizerPacket * packet,
     GstMpegtsSection * section);
 static void gst_ts_demux_flush (MpegTSBase * base, gboolean hard);
 static GstFlowReturn gst_ts_demux_drain (MpegTSBase * base);
-static void
+static gboolean
 gst_ts_demux_stream_added (MpegTSBase * base, MpegTSBaseStream * stream,
     MpegTSBaseProgram * program);
 static void
@@ -305,7 +316,8 @@ static void gst_ts_demux_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 static void gst_ts_demux_flush_streams (GstTSDemux * tsdemux, gboolean hard);
 static GstFlowReturn
-gst_ts_demux_push_pending_data (GstTSDemux * demux, TSDemuxStream * stream);
+gst_ts_demux_push_pending_data (GstTSDemux * demux, TSDemuxStream * stream,
+    MpegTSBaseProgram * program);
 static void gst_ts_demux_stream_flush (TSDemuxStream * stream,
     GstTSDemux * demux, gboolean hard);
 
@@ -384,6 +396,7 @@ gst_ts_demux_class_init (GstTSDemuxClass * klass)
   ts_class->push_event = GST_DEBUG_FUNCPTR (push_event);
   ts_class->program_started = GST_DEBUG_FUNCPTR (gst_ts_demux_program_started);
   ts_class->program_stopped = GST_DEBUG_FUNCPTR (gst_ts_demux_program_stopped);
+  ts_class->update_program = GST_DEBUG_FUNCPTR (gst_ts_demux_update_program);
   ts_class->can_remove_program = gst_ts_demux_can_remove_program;
   ts_class->stream_added = gst_ts_demux_stream_added;
   ts_class->stream_removed = gst_ts_demux_stream_removed;
@@ -418,6 +431,7 @@ gst_ts_demux_reset (MpegTSBase * base)
   demux->group_id = G_MAXUINT;
 
   demux->last_seek_offset = -1;
+  demux->program_generation = 0;
 }
 
 static void
@@ -481,6 +495,11 @@ gst_ts_demux_get_duration (GstTSDemux * demux, GstClockTime * dur)
   MpegTSBase *base = (MpegTSBase *) demux;
   gboolean res = FALSE;
   gint64 val;
+
+  if (!demux->program) {
+    GST_DEBUG_OBJECT (demux, "No active program yet, can't provide duration");
+    return FALSE;
+  }
 
   /* Get total size in bytes */
   if (gst_pad_peer_query_duration (base->sinkpad, GST_FORMAT_BYTES, &val)) {
@@ -971,7 +990,7 @@ push_event (MpegTSBase * base, GstEvent * event)
       /* If we are pushing out EOS, flush out pending data first */
       if (GST_EVENT_TYPE (event) == GST_EVENT_EOS &&
           gst_pad_is_active (stream->pad))
-        gst_ts_demux_push_pending_data (demux, stream);
+        gst_ts_demux_push_pending_data (demux, stream, NULL);
 
       gst_event_ref (event);
       gst_pad_push_event (stream->pad, event);
@@ -1361,9 +1380,6 @@ create_pad_for_stream (MpegTSBase * base, MpegTSBaseStream * bstream,
 
               if (channels != -1) {
                 is_audio = TRUE;
-                template = gst_static_pad_template_get (&audio_template);
-                name = g_strdup_printf ("audio_%04x", bstream->pid);
-
                 caps =
                     gst_codec_utils_opus_create_caps (48000, channels,
                     mapping_family, stream_count, coupled_count,
@@ -1447,6 +1463,83 @@ create_pad_for_stream (MpegTSBase * base, MpegTSBaseStream * bstream,
           "stream-format", G_TYPE_STRING, "byte-stream",
           "alignment", G_TYPE_STRING, "nal", NULL);
       break;
+    case GST_MPEGTS_STREAM_TYPE_VIDEO_JP2K:
+      is_video = TRUE;
+      desc =
+          mpegts_get_descriptor_from_stream (bstream, GST_MTS_DESC_J2K_VIDEO);
+      if (desc == NULL) {
+        caps = gst_caps_new_empty_simple ("image/x-jpc");
+        break;
+      } else {
+        GstByteReader br;
+        guint16 DEN_frame_rate = 0;
+        guint16 NUM_frame_rate = 0;
+        guint8 color_specification = 0;
+        guint8 remaining_8b = 0;
+        gboolean interlaced_video = 0;
+        const gchar *interlace_mode = NULL;
+        const gchar *colorspace = NULL;
+        const gchar *colorimetry_mode = NULL;
+        guint16 profile_and_level G_GNUC_UNUSED;
+        guint32 horizontal_size G_GNUC_UNUSED;
+        guint32 vertical_size G_GNUC_UNUSED;
+        guint32 max_bit_rate G_GNUC_UNUSED;
+        guint32 max_buffer_size G_GNUC_UNUSED;
+        const guint desc_min_length = 24;
+
+        if (desc->length < desc_min_length) {
+          GST_ERROR
+              ("GST_MPEGTS_STREAM_TYPE_VIDEO_JP2K: descriptor length %d too short",
+              desc->length);
+          return NULL;
+        }
+
+        /* Skip the descriptor tag and length */
+        gst_byte_reader_init (&br, desc->data + 2, desc->length);
+
+        profile_and_level = gst_byte_reader_get_uint16_be_unchecked (&br);
+        horizontal_size = gst_byte_reader_get_uint32_be_unchecked (&br);
+        vertical_size = gst_byte_reader_get_uint32_be_unchecked (&br);
+        max_bit_rate = gst_byte_reader_get_uint32_be_unchecked (&br);
+        max_buffer_size = gst_byte_reader_get_uint32_be_unchecked (&br);
+        DEN_frame_rate = gst_byte_reader_get_uint16_be_unchecked (&br);
+        NUM_frame_rate = gst_byte_reader_get_uint16_be_unchecked (&br);
+        color_specification = gst_byte_reader_get_uint8_unchecked (&br);
+        remaining_8b = gst_byte_reader_get_uint8_unchecked (&br);
+        interlaced_video = remaining_8b & 0x40;
+        /* we don't support demuxing interlaced at the moment */
+        if (interlaced_video) {
+          GST_ERROR
+              ("GST_MPEGTS_STREAM_TYPE_VIDEO_JP2K: interlaced video not supported");
+          return NULL;
+        } else {
+          interlace_mode = "progressive";
+          stream->jp2kInfos.interlace = FALSE;
+        }
+        switch (color_specification) {
+          case GST_MPEGTSDEMUX_JPEG2000_COLORSPEC_SRGB:
+            colorspace = "sRGB";
+            colorimetry_mode = GST_VIDEO_COLORIMETRY_SRGB;
+            break;
+          case GST_MPEGTSDEMUX_JPEG2000_COLORSPEC_REC601:
+            colorspace = "sYUV";
+            colorimetry_mode = GST_VIDEO_COLORIMETRY_BT601;
+            break;
+          case GST_MPEGTSDEMUX_JPEG2000_COLORSPEC_REC709:
+          case GST_MPEGTSDEMUX_JPEG2000_COLORSPEC_CIELUV:
+            colorspace = "sYUV";
+            colorimetry_mode = GST_VIDEO_COLORIMETRY_BT709;
+            break;
+          default:
+            break;
+        }
+        caps = gst_caps_new_simple ("image/x-jpc",
+            "framerate", GST_TYPE_FRACTION, NUM_frame_rate, DEN_frame_rate,
+            "interlace-mode", G_TYPE_STRING, interlace_mode,
+            "colorimetry", G_TYPE_STRING, colorimetry_mode,
+            "colorspace", G_TYPE_STRING, colorspace, NULL);
+      }
+      break;
     case ST_VIDEO_DIRAC:
       if (bstream->registration_id == 0x64726163) {
         GST_LOG ("dirac");
@@ -1504,6 +1597,29 @@ create_pad_for_stream (MpegTSBase * base, MpegTSBaseStream * bstream,
       is_audio = TRUE;
       caps = gst_caps_new_empty_simple ("audio/x-ac3");
       break;
+    case ST_PS_AUDIO_EAC3:
+    {
+      /* ATSC_ENHANCED_AC3 */
+      if (bstream->registration_id == DRF_ID_EAC3 ||
+          mpegts_get_descriptor_from_stream (bstream, GST_MTS_DESC_ATSC_EAC3)) {
+        is_audio = TRUE;
+        caps = gst_caps_new_empty_simple ("audio/x-eac3");
+        break;
+      }
+
+      GST_ELEMENT_WARNING (demux, STREAM, DEMUX,
+          ("Assuming ATSC E-AC3 audio stream."),
+          ("ATSC E-AC3 stream type found but no guarantee way found to "
+              "differentiate among other standards (DVB, ISDB and etc..)"));
+
+      is_audio = TRUE;
+      caps = gst_caps_new_empty_simple ("audio/x-eac3");
+      break;
+    }
+    case ST_PS_AUDIO_LPCM2:
+      is_audio = TRUE;
+      caps = gst_caps_new_empty_simple ("audio/x-private2-lpcm");
+      break;
     case ST_PS_AUDIO_DTS:
       is_audio = TRUE;
       caps = gst_caps_new_empty_simple ("audio/x-dts");
@@ -1524,7 +1640,7 @@ create_pad_for_stream (MpegTSBase * base, MpegTSBaseStream * bstream,
       caps = gst_caps_new_empty_simple ("video/x-cavs");
       break;
     default:
-      GST_WARNING ("Non-media stream (stream_type:0x%x). Not creating pad",
+      GST_DEBUG ("Non-media stream (stream_type:0x%x). Not creating pad",
           bstream->stream_type);
       break;
   }
@@ -1533,16 +1649,29 @@ done:
   if (caps) {
     if (is_audio) {
       template = gst_static_pad_template_get (&audio_template);
-      name = g_strdup_printf ("audio_%04x", bstream->pid);
+      name =
+          g_strdup_printf ("audio_%01x_%04x", demux->program_generation,
+          bstream->pid);
+      gst_stream_set_stream_type (bstream->stream_object,
+          GST_STREAM_TYPE_AUDIO);
     } else if (is_video) {
       template = gst_static_pad_template_get (&video_template);
-      name = g_strdup_printf ("video_%04x", bstream->pid);
+      name =
+          g_strdup_printf ("video_%01x_%04x", demux->program_generation,
+          bstream->pid);
+      gst_stream_set_stream_type (bstream->stream_object,
+          GST_STREAM_TYPE_VIDEO);
     } else if (is_private) {
       template = gst_static_pad_template_get (&private_template);
-      name = g_strdup_printf ("private_%04x", bstream->pid);
+      name =
+          g_strdup_printf ("private_%01x_%04x", demux->program_generation,
+          bstream->pid);
     } else if (is_subpicture) {
       template = gst_static_pad_template_get (&subpicture_template);
-      name = g_strdup_printf ("subpicture_%04x", bstream->pid);
+      name =
+          g_strdup_printf ("subpicture_%01x_%04x", demux->program_generation,
+          bstream->pid);
+      gst_stream_set_stream_type (bstream->stream_object, GST_STREAM_TYPE_TEXT);
     } else
       g_assert_not_reached ();
 
@@ -1550,16 +1679,14 @@ done:
 
   if (template && name && caps) {
     GstEvent *event;
-    gchar *stream_id;
+    const gchar *stream_id;
 
     GST_LOG ("stream:%p creating pad with name %s and caps %" GST_PTR_FORMAT,
         stream, name, caps);
     pad = gst_pad_new_from_template (template, name);
     gst_pad_set_active (pad, TRUE);
     gst_pad_use_fixed_caps (pad);
-    stream_id =
-        gst_pad_create_stream_id_printf (pad, GST_ELEMENT_CAST (base), "%08x",
-        bstream->pid);
+    stream_id = gst_stream_get_stream_id (bstream->stream_object);
 
     event = gst_pad_get_sticky_event (base->sinkpad, GST_EVENT_STREAM_START, 0);
     if (event) {
@@ -1573,19 +1700,24 @@ done:
       demux->group_id = gst_util_group_id_next ();
     }
     event = gst_event_new_stream_start (stream_id);
+    gst_event_set_stream (event, bstream->stream_object);
     if (demux->have_group_id)
       gst_event_set_group_id (event, demux->group_id);
-    if (sparse)
+    if (sparse) {
       gst_event_set_stream_flags (event, GST_STREAM_FLAG_SPARSE);
+      gst_stream_set_stream_flags (bstream->stream_object,
+          GST_STREAM_FLAG_SPARSE);
+    }
     stream->sparse = sparse;
-
-    gst_pad_push_event (pad, event);
-    g_free (stream_id);
-    gst_pad_set_caps (pad, caps);
+    gst_stream_set_caps (bstream->stream_object, caps);
     if (!stream->taglist)
       stream->taglist = gst_tag_list_new_empty ();
     gst_pb_utils_add_codec_description_to_tag_list (stream->taglist, NULL,
         caps);
+    gst_stream_set_tags (bstream->stream_object, stream->taglist);
+
+    gst_pad_push_event (pad, event);
+    gst_pad_set_caps (pad, caps);
     gst_pad_set_query_function (pad, gst_ts_demux_srcpad_query);
     gst_pad_set_event_function (pad, gst_ts_demux_srcpad_event);
   }
@@ -1599,7 +1731,7 @@ done:
   return pad;
 }
 
-static void
+static gboolean
 gst_ts_demux_stream_added (MpegTSBase * base, MpegTSBaseStream * bstream,
     MpegTSBaseProgram * program)
 {
@@ -1638,8 +1770,12 @@ gst_ts_demux_stream_added (MpegTSBase * base, MpegTSBaseStream * bstream,
     stream->nb_out_buffers = 0;
     stream->gap_ref_buffers = 0;
     stream->gap_ref_pts = GST_CLOCK_TIME_NONE;
+    /* Only wait for a valid timestamp if we have a PCR_PID */
+    stream->pending_ts = program->pcr_pid < 0x1fff;
     stream->continuity_counter = CONTINUITY_UNSET;
   }
+
+  return (stream->pad != NULL);
 }
 
 static void
@@ -1668,7 +1804,7 @@ gst_ts_demux_stream_removed (MpegTSBase * base, MpegTSBaseStream * bstream)
       if (gst_pad_is_active (stream->pad)) {
         /* Flush out all data */
         GST_DEBUG_OBJECT (stream->pad, "Flushing out pending data");
-        gst_ts_demux_push_pending_data ((GstTSDemux *) base, stream);
+        gst_ts_demux_push_pending_data ((GstTSDemux *) base, stream, NULL);
 
         GST_DEBUG_OBJECT (stream->pad, "Pushing out EOS");
         gst_pad_push_event (stream->pad, gst_event_new_eos ());
@@ -1781,6 +1917,34 @@ gst_ts_demux_can_remove_program (MpegTSBase * base, MpegTSBaseProgram * program)
   return TRUE;
 }
 
+static void
+gst_ts_demux_update_program (MpegTSBase * base, MpegTSBaseProgram * program)
+{
+  GstTSDemux *demux = GST_TS_DEMUX (base);
+  GList *tmp;
+
+  GST_DEBUG ("Updating program %d", program->program_number);
+  /* Emit collection message */
+  gst_element_post_message ((GstElement *) base,
+      gst_message_new_stream_collection ((GstObject *) base,
+          program->collection));
+
+  /* Add all streams, then fire no-more-pads */
+  for (tmp = program->stream_list; tmp; tmp = tmp->next) {
+    TSDemuxStream *stream = (TSDemuxStream *) tmp->data;
+    if (!stream->pad) {
+      activate_pad_for_stream (demux, stream);
+      if (stream->sparse) {
+        /* force sending of pending sticky events which have been stored on the
+         * pad already and which otherwise would only be sent on the first buffer
+         * or serialized event (which means very late in case of subtitle streams),
+         * and playsink waits for stream-start or another serialized event */
+        GST_DEBUG_OBJECT (stream->pad, "sparse stream, pushing GAP event");
+        gst_pad_push_event (stream->pad, gst_event_new_gap (0, 0));
+      }
+    }
+  }
+}
 
 static void
 gst_ts_demux_program_started (MpegTSBase * base, MpegTSBaseProgram * program)
@@ -1794,10 +1958,19 @@ gst_ts_demux_program_started (MpegTSBase * base, MpegTSBaseProgram * program)
   if (demux->requested_program_number == program->program_number ||
       (demux->requested_program_number == -1 && demux->program_number == -1)) {
     GList *tmp;
+    gboolean have_pads = FALSE;
 
     GST_LOG ("program %d started", program->program_number);
     demux->program_number = program->program_number;
     demux->program = program;
+
+    /* Increment the program_generation counter */
+    demux->program_generation = (demux->program_generation + 1) & 0xf;
+
+    /* Emit collection message */
+    gst_element_post_message ((GstElement *) base,
+        gst_message_new_stream_collection ((GstObject *) base,
+            program->collection));
 
     /* If this is not the initial program, we need to calculate
      * a new segment */
@@ -1813,7 +1986,8 @@ gst_ts_demux_program_started (MpegTSBase * base, MpegTSBaseProgram * program)
       for (tmp = demux->previous_program->stream_list; tmp; tmp = tmp->next) {
         TSDemuxStream *stream = (TSDemuxStream *) tmp->data;
         if (stream->pad)
-          gst_ts_demux_push_pending_data (demux, stream);
+          gst_ts_demux_push_pending_data (demux, stream,
+              demux->previous_program);
       }
     }
 
@@ -1821,6 +1995,8 @@ gst_ts_demux_program_started (MpegTSBase * base, MpegTSBaseProgram * program)
     for (tmp = program->stream_list; tmp; tmp = tmp->next) {
       TSDemuxStream *stream = (TSDemuxStream *) tmp->data;
       activate_pad_for_stream (demux, stream);
+      if (stream->pad)
+        have_pads = TRUE;
     }
 
     /* If there was a previous program, now is the time to deactivate it
@@ -1830,6 +2006,16 @@ gst_ts_demux_program_started (MpegTSBase * base, MpegTSBaseProgram * program)
       mpegts_base_deactivate_and_free_program (base, demux->previous_program);
       demux->previous_program = NULL;
     }
+
+    if (!have_pads) {
+      /* If we had no pads, this stream is likely corrupted or unsupported and
+       * there's not much we can do at this point */
+      GST_ELEMENT_ERROR (demux, STREAM, WRONG_TYPE,
+          ("This stream contains no valid or supported streams."),
+          ("activating program but got no pads"));
+      return;
+    }
+
     /* If any of the stream is sparse, push a GAP event before anything else
      * This is done here, and not in activate_pad_for_stream() because pushing
      * a GAP event *is* considering data, and we want to ensure the (potential)
@@ -1845,6 +2031,7 @@ gst_ts_demux_program_started (MpegTSBase * base, MpegTSBaseProgram * program)
         gst_pad_push_event (stream->pad, gst_event_new_gap (0, 0));
       }
     }
+
     gst_element_no_more_pads ((GstElement *) demux);
   }
 }
@@ -1937,15 +2124,28 @@ check_pending_buffers (GstTSDemux * demux)
   /* The biggest offset */
   guint64 offset = 0;
   GList *tmp;
+  gboolean have_only_sparse = TRUE;
+
+  /* 0. Do we only have sparse stream */
+  for (tmp = demux->program->stream_list; tmp; tmp = tmp->next) {
+    TSDemuxStream *tmpstream = (TSDemuxStream *) tmp->data;
+
+    if (!tmpstream->sparse) {
+      have_only_sparse = FALSE;
+      break;
+    }
+  }
 
   /* 1. Go over all streams */
   for (tmp = demux->program->stream_list; tmp; tmp = tmp->next) {
     TSDemuxStream *tmpstream = (TSDemuxStream *) tmp->data;
     /* 1.1 check if at least one stream got a valid DTS */
-    if ((tmpstream->raw_dts != -1 && tmpstream->dts != GST_CLOCK_TIME_NONE) ||
-        (tmpstream->raw_pts != -1 && tmpstream->pts != GST_CLOCK_TIME_NONE)) {
-      have_observation = TRUE;
-      break;
+    if (have_only_sparse || !tmpstream->sparse) {
+      if ((tmpstream->raw_dts != -1 && tmpstream->dts != GST_CLOCK_TIME_NONE) ||
+          (tmpstream->raw_pts != -1 && tmpstream->pts != GST_CLOCK_TIME_NONE)) {
+        have_observation = TRUE;
+        break;
+      }
     }
   }
 
@@ -2213,7 +2413,8 @@ gst_ts_demux_queue_data (GstTSDemux * demux, TSDemuxStream * stream,
 }
 
 static void
-calculate_and_push_newsegment (GstTSDemux * demux, TSDemuxStream * stream)
+calculate_and_push_newsegment (GstTSDemux * demux, TSDemuxStream * stream,
+    MpegTSBaseProgram * target_program)
 {
   MpegTSBase *base = (MpegTSBase *) demux;
   GstClockTime lowest_pts = GST_CLOCK_TIME_NONE;
@@ -2222,12 +2423,15 @@ calculate_and_push_newsegment (GstTSDemux * demux, TSDemuxStream * stream)
 
   GST_DEBUG ("Creating new newsegment for stream %p", stream);
 
+  if (target_program == NULL)
+    target_program = demux->program;
+
   /* Speedup : if we don't need to calculate anything, go straight to pushing */
   if (demux->segment_event)
     goto push_new_segment;
 
   /* Calculate the 'new_start' value, used for newsegment */
-  for (tmp = demux->program->stream_list; tmp; tmp = tmp->next) {
+  for (tmp = target_program->stream_list; tmp; tmp = tmp->next) {
     TSDemuxStream *pstream = (TSDemuxStream *) tmp->data;
 
     if (GST_CLOCK_TIME_IS_VALID (pstream->first_pts)) {
@@ -2272,11 +2476,13 @@ calculate_and_push_newsegment (GstTSDemux * demux, TSDemuxStream * stream)
 
   if (!demux->segment_event) {
     demux->segment_event = gst_event_new_segment (&demux->segment);
-    GST_EVENT_SEQNUM (demux->segment_event) = base->last_seek_seqnum;
+
+    if (base->last_seek_seqnum != GST_SEQNUM_INVALID)
+      gst_event_set_seqnum (demux->segment_event, base->last_seek_seqnum);
   }
 
 push_new_segment:
-  for (tmp = demux->program->stream_list; tmp; tmp = tmp->next) {
+  for (tmp = target_program->stream_list; tmp; tmp = tmp->next) {
     stream = (TSDemuxStream *) tmp->data;
     if (stream->pad == NULL)
       continue;
@@ -2351,7 +2557,7 @@ gst_ts_demux_check_and_sync_streams (GstTSDemux * demux, GstClockTime time)
           "Stream needs update. Pushing GAP event to TS %" GST_TIME_FORMAT,
           GST_TIME_ARGS (time));
       if (G_UNLIKELY (ps->need_newsegment))
-        calculate_and_push_newsegment (demux, ps);
+        calculate_and_push_newsegment (demux, ps, NULL);
 
       /* Now send gap event */
       gst_pad_push_event (ps->pad, gst_event_new_gap (time, 0));
@@ -2453,18 +2659,167 @@ error:
     g_free (stream->data);
     stream->data = NULL;
     stream->current_size = 0;
-    gst_buffer_list_unref (buffer_list);
+    if (buffer_list)
+      gst_buffer_list_unref (buffer_list);
     return NULL;
   }
 }
 
+/* interlaced mode is disabled at the moment */
+/*#define TSDEMUX_JP2K_SUPPORT_INTERLACE */
+static GstBuffer *
+parse_jp2k_access_unit (TSDemuxStream * stream)
+{
+  GstByteReader reader;
+  /* header tag */
+  guint32 header_tag;
+  /* Framerate box */
+  guint16 den G_GNUC_UNUSED;
+  guint16 num G_GNUC_UNUSED;
+  /* Maximum bitrate box */
+  guint32 MaxBr G_GNUC_UNUSED;
+  guint32 AUF[2] = { 0, 0 };
+#ifdef TSDEMUX_JP2K_SUPPORT_INTERLACE
+  /* Field Coding Box */
+  guint8 Fic G_GNUC_UNUSED = 1;
+  guint8 Fio G_GNUC_UNUSED = 0;
+  /* header size equals 38 for non-interlaced, and 48 for interlaced */
+  guint header_size = stream->jp2kInfos.interlace ? 48 : 38;
+#else
+  /* header size equals 38 for non-interlaced, and 48 for interlaced */
+  guint header_size = 38;
+#endif
+  /* Time Code box */
+  guint32 HHMMSSFF G_GNUC_UNUSED;
+  /* Broadcast color box */
+  guint8 CollC G_GNUC_UNUSED;
+  guint8 b G_GNUC_UNUSED;
+
+  guint data_location;
+  GstBuffer *retbuf = NULL;
+
+  if (stream->current_size < header_size) {
+    GST_ERROR_OBJECT (stream->pad, "Not enough data for header");
+    goto error;
+  }
+
+  gst_byte_reader_init (&reader, stream->data, stream->current_size);
+
+  /* Check for the location of the jp2k magic */
+  data_location =
+      gst_byte_reader_masked_scan_uint32 (&reader, 0xffffffff, 0xff4fff51, 0,
+      stream->current_size);
+  GST_DEBUG_OBJECT (stream->pad, "data location %d", data_location);
+  if (data_location == -1) {
+    GST_ERROR_OBJECT (stream->pad, "Stream does not contain jp2k magic header");
+    goto error;
+  }
+
+  /* Elementary stream header box 'elsm' == 0x656c736d */
+  header_tag = gst_byte_reader_get_uint32_be_unchecked (&reader);
+  if (header_tag != 0x656c736d) {
+    GST_ERROR_OBJECT (stream->pad, "Expected ELSM box but found box %x instead",
+        header_tag);
+    goto error;
+  }
+  /* Frame rate box 'frat' == 0x66726174 */
+  header_tag = gst_byte_reader_get_uint32_be_unchecked (&reader);
+  if (header_tag != 0x66726174) {
+    GST_ERROR_OBJECT (stream->pad,
+        "Expected frame rate box, but found box %x instead", header_tag);
+    goto error;
+
+  }
+  den = gst_byte_reader_get_uint16_be_unchecked (&reader);
+  num = gst_byte_reader_get_uint16_be_unchecked (&reader);
+  /* Maximum bit rate box 'brat' == 0x62726174 */
+  header_tag = gst_byte_reader_get_uint32_be_unchecked (&reader);
+  if (header_tag != 0x62726174) {
+    GST_ERROR_OBJECT (stream->pad, "Expected brat box but read box %x instead",
+        header_tag);
+    goto error;
+
+  }
+  MaxBr = gst_byte_reader_get_uint32_be_unchecked (&reader);
+  AUF[0] = gst_byte_reader_get_uint32_be_unchecked (&reader);
+  if (stream->jp2kInfos.interlace) {
+#ifdef TSDEMUX_JP2K_SUPPORT_INTERLACE
+    AUF[1] = gst_byte_reader_get_uint32_be_unchecked (&reader);
+    /*  Field Coding Box 'fiel' == 0x6669656c */
+    header_tag = gst_byte_reader_get_uint32_be_unchecked (&reader);
+    if (header_tag != 0x6669656c) {
+      GST_ERROR_OBJECT (stream->pad,
+          "Expected Field Coding box but found box %x instead", header_tag);
+      goto error;
+    }
+    Fic = gst_byte_reader_get_uint8_unchecked (&reader);
+    Fio = gst_byte_reader_get_uint8_unchecked (&reader);
+#else
+    GST_ERROR_OBJECT (stream->pad, "interlaced mode not supported");
+    goto error;
+#endif
+  }
+
+  /* Time Code Box 'tcod' == 0x74636f64 */
+  /* Some progressive streams might have a AUF[1] of value 0 present */
+  header_tag = gst_byte_reader_get_uint32_be_unchecked (&reader);
+  if (header_tag == 0 && !stream->jp2kInfos.interlace) {
+    AUF[1] = header_tag;
+    header_tag = gst_byte_reader_get_uint32_be_unchecked (&reader);
+    /* Bump up header size and recheck */
+    header_size += 4;
+    if (stream->current_size < header_size) {
+      GST_ERROR_OBJECT (stream->pad, "Not enough data for header");
+      goto error;
+    }
+  }
+  if (header_tag != 0x74636f64) {
+    GST_ERROR_OBJECT (stream->pad,
+        "Expected Time code box but found %d box instead", header_tag);
+    goto error;
+  }
+  HHMMSSFF = gst_byte_reader_get_uint32_be_unchecked (&reader);
+  /* Broadcast Color Box 'bcol' == 0x6263686c */
+  header_tag = gst_byte_reader_get_uint32_be_unchecked (&reader);
+  if (header_tag != 0x62636f6c) {
+    GST_ERROR_OBJECT (stream->pad,
+        "Expected Broadcast color box but found %x box instead", header_tag);
+    goto error;
+  }
+  CollC = gst_byte_reader_get_uint8_unchecked (&reader);
+  b = gst_byte_reader_get_uint8_unchecked (&reader);
+
+  /* Check if we have enough data to create a valid buffer */
+  if ((stream->current_size - data_location) < (AUF[0] + AUF[1])) {
+    GST_ERROR ("Required size (%d) greater than remaining size in buffer (%d)",
+        AUF[0] + AUF[1], (stream->current_size - data_location));
+    goto error;
+  }
+
+  retbuf = gst_buffer_new_wrapped_full (0, stream->data, stream->current_size,
+      data_location, stream->current_size - data_location,
+      stream->data, g_free);
+  stream->data = NULL;
+  stream->current_size = 0;
+  return retbuf;
+
+error:
+  GST_ERROR ("Failed to parse JP2K access unit");
+  g_free (stream->data);
+  stream->data = NULL;
+  stream->current_size = 0;
+  return NULL;
+}
+
 static GstFlowReturn
-gst_ts_demux_push_pending_data (GstTSDemux * demux, TSDemuxStream * stream)
+gst_ts_demux_push_pending_data (GstTSDemux * demux, TSDemuxStream * stream,
+    MpegTSBaseProgram * target_program)
 {
   GstFlowReturn res = GST_FLOW_OK;
   MpegTSBaseStream *bs = (MpegTSBaseStream *) stream;
   GstBuffer *buffer = NULL;
   GstBufferList *buffer_list = NULL;
+
 
   GST_DEBUG_OBJECT (stream->pad,
       "stream:%p, pid:0x%04x stream_type:%d state:%d", stream, bs->pid,
@@ -2513,6 +2868,12 @@ gst_ts_demux_push_pending_data (GstTSDemux * demux, TSDemuxStream * stream)
           gst_buffer_list_unref (buffer_list);
           buffer_list = NULL;
         }
+      } else if (bs->stream_type == GST_MPEGTS_STREAM_TYPE_VIDEO_JP2K) {
+        buffer = parse_jp2k_access_unit (stream);
+        if (!buffer) {
+          res = GST_FLOW_ERROR;
+          goto beach;
+        }
       } else {
         buffer = gst_buffer_new_wrapped (stream->data, stream->current_size);
       }
@@ -2547,6 +2908,12 @@ gst_ts_demux_push_pending_data (GstTSDemux * demux, TSDemuxStream * stream)
         gst_buffer_list_unref (buffer_list);
         buffer_list = NULL;
       }
+    } else if (bs->stream_type == GST_MPEGTS_STREAM_TYPE_VIDEO_JP2K) {
+      buffer = parse_jp2k_access_unit (stream);
+      if (!buffer) {
+        res = GST_FLOW_ERROR;
+        goto beach;
+      }
     } else {
       buffer = gst_buffer_new_wrapped (stream->data, stream->current_size);
     }
@@ -2579,7 +2946,7 @@ gst_ts_demux_push_pending_data (GstTSDemux * demux, TSDemuxStream * stream)
   }
 
   if (G_UNLIKELY (stream->need_newsegment))
-    calculate_and_push_newsegment (demux, stream);
+    calculate_and_push_newsegment (demux, stream, target_program);
 
   /* FIXME : Push pending buffers if any */
   if (G_UNLIKELY (stream->pending)) {
@@ -2673,13 +3040,19 @@ gst_ts_demux_push_pending_data (GstTSDemux * demux, TSDemuxStream * stream)
      * hit this will trigger a gap check */
     if (G_UNLIKELY (stream->pts != GST_CLOCK_TIME_NONE &&
             stream->pts > stream->gap_ref_pts + 2 * GST_SECOND)) {
-      GstClockTime curpcr =
-          mpegts_packetizer_get_current_time (MPEG_TS_BASE_PACKETIZER (demux),
-          demux->program->pcr_pid);
-      if (curpcr == GST_CLOCK_TIME_NONE || curpcr < 800 * GST_MSECOND)
-        goto beach;
-      curpcr -= 800 * GST_MSECOND;
-      gst_ts_demux_check_and_sync_streams (demux, curpcr);
+      if (demux->program->pcr_pid != 0x1fff) {
+        GstClockTime curpcr =
+            mpegts_packetizer_get_current_time (MPEG_TS_BASE_PACKETIZER (demux),
+            demux->program->pcr_pid);
+        if (curpcr == GST_CLOCK_TIME_NONE || curpcr < 800 * GST_MSECOND)
+          goto beach;
+        curpcr -= 800 * GST_MSECOND;
+        /* Use the current PCR (with a safety margin) to sync against */
+        gst_ts_demux_check_and_sync_streams (demux, curpcr);
+      } else {
+        /* If we don't have a PCR track, just use the current stream PTS */
+        gst_ts_demux_check_and_sync_streams (demux, stream->pts);
+      }
     }
   }
 
@@ -2707,7 +3080,7 @@ gst_ts_demux_handle_packet (GstTSDemux * demux, TSDemuxStream * stream,
   if (G_UNLIKELY (packet->payload_unit_start_indicator) &&
       FLAGS_HAS_PAYLOAD (packet->scram_afc_cc))
     /* Flush previous data */
-    res = gst_ts_demux_push_pending_data (demux, stream);
+    res = gst_ts_demux_push_pending_data (demux, stream, NULL);
 
   if (packet->payload && (res == GST_FLOW_OK || res == GST_FLOW_NOT_LINKED)
       && stream->pad) {
@@ -2717,7 +3090,7 @@ gst_ts_demux_handle_packet (GstTSDemux * demux, TSDemuxStream * stream,
     /* Finally check if the data we queued completes a packet */
     if (stream->expected_size && stream->current_size == stream->expected_size) {
       GST_LOG ("pushing complete packet");
-      res = gst_ts_demux_push_pending_data (demux, stream);
+      res = gst_ts_demux_push_pending_data (demux, stream, NULL);
     }
   }
 
@@ -2765,7 +3138,7 @@ gst_ts_demux_drain (MpegTSBase * base)
   for (tmp = demux->program->stream_list; tmp; tmp = tmp->next) {
     TSDemuxStream *stream = (TSDemuxStream *) tmp->data;
     if (stream->pad) {
-      res = gst_ts_demux_push_pending_data (demux, stream);
+      res = gst_ts_demux_push_pending_data (demux, stream, NULL);
       if (G_UNLIKELY (res != GST_FLOW_OK))
         break;
     }

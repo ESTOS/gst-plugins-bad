@@ -46,6 +46,7 @@
 
 /**
  * SECTION:element-srtpdec
+ * @title: srtpdec
  * @see_also: srtpenc
  *
  * gstrtpdec acts as a decoder that removes security from SRTP and SRTCP
@@ -95,33 +96,22 @@
  * other means. If no rollover counter is provided by the user, 0 is
  * used by default.
  *
- * <refsect2>
- * <title>Example pipelines</title>
+ * ## Example pipelines
  * |[
- * gst-launch-1.0 udpsrc port=5004 caps='application/x-srtp, payload=(int)8, ssrc=(uint)1356955624, srtp-key=(buffer)012345678901234567890123456789012345678901234567890123456789, srtp-cipher=(string)aes-128-icm, srtp-auth=(string)hmac-sha1-80, srtcp-cipher=(string)aes-128-icm, srtcp-auth=(string)hmac-sha1-80' !  srtpdec ! rtppcmadepay ! alawdec ! pulsesink
+ * gst-launch-1.0 udpsrc port=5004 caps='application/x-srtp, payload=(int)8, ssrc=(uint)1356955624, srtp-key=(buffer)012345678901234567890123456789012345678901234567890123456789, srtp-cipher=(string)aes-128-icm, srtp-auth=(string)hmac-sha1-80, srtcp-cipher=(string)aes-128-icm, srtcp-auth=(string)hmac-sha1-80, roc=(uint)0' !  srtpdec ! rtppcmadepay ! alawdec ! pulsesink
  * ]| Receive PCMA SRTP packets through UDP using caps to specify
  * master key and protection.
  * |[
  * gst-launch-1.0 audiotestsrc ! alawenc ! rtppcmapay ! 'application/x-rtp, payload=(int)8, ssrc=(uint)1356955624' ! srtpenc key="012345678901234567890123456789012345678901234567890123456789" ! udpsink port=5004
  * ]| Send PCMA SRTP packets through UDP, nothing how the SSRC is forced so
  * that the receiver will recognize it.
- * </refsect2>
+ *
  */
-
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
-#include <gst/gst.h>
-#include <gst/rtp/gstrtpbuffer.h>
-#include <string.h>
-
-#include "gstsrtp.h"
-#include "gstsrtp-enumtypes.h"
 
 #include "gstsrtpdec.h"
 
-#include <srtp/srtp_priv.h>
+#include <gst/rtp/gstrtpbuffer.h>
+#include <string.h>
 
 GST_DEBUG_CATEGORY_STATIC (gst_srtp_dec_debug);
 #define GST_CAT_DEFAULT gst_srtp_dec_debug
@@ -142,7 +132,8 @@ enum
 enum
 {
   PROP_0,
-  PROP_REPLAY_WINDOW_SIZE
+  PROP_REPLAY_WINDOW_SIZE,
+  PROP_STATS
 };
 
 /* the capabilities of the inputs and outputs.
@@ -248,14 +239,14 @@ gst_srtp_dec_class_init (GstSrtpDecClass * klass)
   gobject_class->set_property = gst_srtp_dec_set_property;
   gobject_class->get_property = gst_srtp_dec_get_property;
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&rtp_src_template));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&rtp_sink_template));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&rtcp_src_template));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&rtcp_sink_template));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &rtp_src_template);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &rtp_sink_template);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &rtcp_src_template);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &rtcp_sink_template);
 
   gst_element_class_set_static_metadata (gstelement_class, "SRTP decoder",
       "Filter/Network/SRTP",
@@ -275,6 +266,9 @@ gst_srtp_dec_class_init (GstSrtpDecClass * klass)
           "Size of the replay protection window",
           64, 0x8000, DEFAULT_REPLAY_WINDOW_SIZE,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_STATS,
+      g_param_spec_boxed ("stats", "Statistics", "Various statistics",
+          GST_TYPE_STRUCTURE, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
 
   /* Install signals */
   /**
@@ -405,7 +399,52 @@ gst_srtp_dec_init (GstSrtpDec * filter)
   gst_element_add_pad (GST_ELEMENT (filter), filter->rtcp_srcpad);
 
   filter->first_session = TRUE;
+
+#ifndef HAVE_SRTP2
   filter->roc_changed = FALSE;
+#endif
+}
+
+static GstStructure *
+gst_srtp_dec_create_stats (GstSrtpDec * filter)
+{
+  GstStructure *s;
+  GValue va = G_VALUE_INIT;
+  GValue v = G_VALUE_INIT;
+
+  s = gst_structure_new_empty ("application/x-srtp-decoder-stats");
+
+  g_value_init (&va, GST_TYPE_ARRAY);
+  g_value_init (&v, GST_TYPE_STRUCTURE);
+
+  if (filter->session) {
+    GHashTableIter iter;
+    gpointer key;
+
+    g_hash_table_iter_init (&iter, filter->streams);
+    while (g_hash_table_iter_next (&iter, &key, NULL)) {
+      GstStructure *ss;
+      guint32 ssrc = GPOINTER_TO_UINT (key);
+      srtp_err_status_t status;
+      guint32 roc;
+
+      status = srtp_get_stream_roc (filter->session, ssrc, &roc);
+      if (status != srtp_err_status_ok) {
+        continue;
+      }
+
+      ss = gst_structure_new ("application/x-srtp-stream",
+          "ssrc", G_TYPE_UINT, ssrc, "roc", G_TYPE_UINT, roc, NULL);
+
+      g_value_take_boxed (&v, ss);
+      gst_value_array_append_value (&va, &v);
+    }
+  }
+
+  gst_structure_take_value (s, "streams", &va);
+  g_value_unset (&v);
+
+  return s;
 }
 
 static void
@@ -439,6 +478,9 @@ gst_srtp_dec_get_property (GObject * object, guint prop_id,
   switch (prop_id) {
     case PROP_REPLAY_WINDOW_SIZE:
       g_value_set_uint (value, filter->replay_window_size);
+      break;
+    case PROP_STATS:
+      g_value_take_boxed (value, gst_srtp_dec_create_stats (filter));
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -514,7 +556,8 @@ get_stream_from_caps (GstSrtpDec * filter, GstCaps * caps, guint32 ssrc)
     goto error;
   }
 
-  if (stream->rtcp_cipher != NULL_CIPHER && stream->rtcp_auth == NULL_AUTH) {
+  if (stream->rtcp_cipher != SRTP_NULL_CIPHER &&
+      stream->rtcp_auth == SRTP_NULL_AUTH) {
     GST_WARNING_OBJECT (filter,
         "Cannot have SRTP NULL authentication with a not-NULL encryption"
         " cipher.");
@@ -552,11 +595,11 @@ signal_get_srtp_params (GstSrtpDec * filter, guint32 ssrc, gint signal)
 
 /* Create a stream in the session
  */
-static err_status_t
+static srtp_err_status_t
 init_session_stream (GstSrtpDec * filter, guint32 ssrc,
     GstSrtpDecSsrcStream * stream)
 {
-  err_status_t ret;
+  srtp_err_status_t ret;
   srtp_policy_t policy;
   GstMapInfo map;
   guchar tmp[1];
@@ -564,7 +607,7 @@ init_session_stream (GstSrtpDec * filter, guint32 ssrc,
   memset (&policy, 0, sizeof (srtp_policy_t));
 
   if (!stream)
-    return err_status_bad_param;
+    return srtp_err_status_bad_param;
 
   GST_INFO_OBJECT (filter, "Setting RTP policy...");
   set_crypto_policy_cipher_auth (stream->rtp_cipher, stream->rtp_auth,
@@ -596,17 +639,20 @@ init_session_stream (GstSrtpDec * filter, guint32 ssrc,
   if (stream->key)
     gst_buffer_unmap (stream->key, &map);
 
-  if (ret == err_status_ok) {
-    srtp_stream_t srtp_stream;
+  if (ret == srtp_err_status_ok) {
+    srtp_err_status_t status;
 
-    srtp_stream = srtp_get_stream (filter->session, htonl (ssrc));
-    if (srtp_stream) {
+    status = srtp_set_stream_roc (filter->session, ssrc, stream->roc);
+#ifdef HAVE_SRTP2
+    (void) status;              /* Ignore unused variable */
+#else
+    if (status == srtp_err_status_ok) {
       /* Here, we just set the ROC, but we also need to set the initial
        * RTP sequence number later, otherwise libsrtp will not be able
        * to get the right packet index. */
-      rdbx_set_roc (&srtp_stream->rtp_rdbx, stream->roc);
       filter->roc_changed = TRUE;
     }
+#endif
 
     filter->first_session = FALSE;
     g_hash_table_insert (filter->streams, GUINT_TO_POINTER (stream->ssrc),
@@ -671,7 +717,7 @@ update_session_stream_from_caps (GstSrtpDec * filter, guint32 ssrc,
 {
   GstSrtpDecSsrcStream *stream = NULL;
   GstSrtpDecSsrcStream *old_stream = NULL;
-  err_status_t err;
+  srtp_err_status_t err;
 
   g_return_val_if_fail (GST_IS_SRTP_DEC (filter), NULL);
   g_return_val_if_fail (GST_IS_CAPS (caps), NULL);
@@ -709,7 +755,7 @@ update_session_stream_from_caps (GstSrtpDec * filter, guint32 ssrc,
     /* Create new session stream */
     err = init_session_stream (filter, ssrc, stream);
 
-    if (err != err_status_ok) {
+    if (err != srtp_err_status_ok) {
       if (stream->key)
         gst_buffer_unref (stream->key);
       g_slice_free (GstSrtpDecSsrcStream, stream);
@@ -735,8 +781,10 @@ gst_srtp_dec_clear_streams (GstSrtpDec * filter)
 
   GST_OBJECT_LOCK (filter);
 
-  if (!filter->first_session)
+  if (!filter->first_session) {
     srtp_dealloc (filter->session);
+    filter->session = NULL;
+  }
 
   if (filter->streams)
     nb = g_hash_table_foreach_remove (filter->streams, remove_yes, NULL);
@@ -1095,7 +1143,7 @@ gst_srtp_dec_decode_buffer (GstSrtpDec * filter, GstPad * pad, GstBuffer * buf,
     gboolean is_rtcp, guint32 ssrc)
 {
   GstMapInfo map;
-  err_status_t err;
+  srtp_err_status_t err;
   gint size;
 
   GST_LOG_OBJECT (pad, "Received %s buffer of size %" G_GSIZE_FORMAT
@@ -1115,6 +1163,7 @@ unprotect:
   if (is_rtcp)
     err = srtp_unprotect_rtcp (filter->session, map.data, &size);
   else {
+#ifndef HAVE_SRTP2
     /* If ROC has changed, we know we need to set the initial RTP
      * sequence number too. */
     if (filter->roc_changed) {
@@ -1139,18 +1188,19 @@ unprotect:
 
       filter->roc_changed = FALSE;
     }
+#endif
     err = srtp_unprotect (filter->session, map.data, &size);
   }
 
   GST_OBJECT_UNLOCK (filter);
 
-  if (err != err_status_ok) {
+  if (err != srtp_err_status_ok) {
     GST_WARNING_OBJECT (pad,
         "Unable to unprotect buffer (unprotect failed code %d)", err);
 
     /* Signal user depending on type of error */
     switch (err) {
-      case err_status_key_expired:
+      case srtp_err_status_key_expired:
         GST_OBJECT_LOCK (filter);
 
         /* Update stream */
@@ -1168,10 +1218,10 @@ unprotect:
               "dropping");
         }
         break;
-      case err_status_auth_fail:
+      case srtp_err_status_auth_fail:
         GST_WARNING_OBJECT (filter, "Error authentication packet, dropping");
         break;
-      case err_status_cipher_fail:
+      case srtp_err_status_cipher_fail:
         GST_WARNING_OBJECT (filter, "Error while decrypting packet, dropping");
         break;
       default:

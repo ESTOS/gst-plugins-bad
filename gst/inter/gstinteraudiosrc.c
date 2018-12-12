@@ -18,21 +18,21 @@
  */
 /**
  * SECTION:element-gstinteraudiosrc
+ * @title: gstinteraudiosrc
  *
  * The interaudiosrc element is an audio source element.  It is used
  * in connection with a interaudiosink element in a different pipeline.
  *
- * <refsect2>
- * <title>Example launch line</title>
+ * ## Example launch line
  * |[
  * gst-launch-1.0 -v interaudiosrc ! queue ! autoaudiosink
  * ]|
- * 
+ *
  * The interaudiosrc element cannot be used effectively with gst-launch-1.0,
  * as it requires a second pipeline in the application to send audio.
  * See the gstintertest.c example in the gst-plugins-bad source code for
  * more details.
- * </refsect2>
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -106,8 +106,8 @@ gst_inter_audio_src_class_init (GstInterAudioSrcClass * klass)
   GST_DEBUG_CATEGORY_INIT (gst_inter_audio_src_debug_category, "interaudiosrc",
       0, "debug category for interaudiosrc element");
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_inter_audio_src_src_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_inter_audio_src_src_template);
 
   gst_element_class_set_static_metadata (element_class,
       "Internal audio source",
@@ -412,7 +412,8 @@ gst_inter_audio_src_create (GstBaseSrc * src, guint64 offset, guint size,
 
   GST_BUFFER_OFFSET (buffer) = interaudiosrc->n_samples;
   GST_BUFFER_OFFSET_END (buffer) = interaudiosrc->n_samples + n;
-  GST_BUFFER_TIMESTAMP (buffer) = interaudiosrc->timestamp_offset +
+  GST_BUFFER_DTS (buffer) = GST_CLOCK_TIME_NONE;
+  GST_BUFFER_PTS (buffer) = interaudiosrc->timestamp_offset +
       gst_util_uint64_scale (interaudiosrc->n_samples, GST_SECOND,
       interaudiosrc->info.rate);
   GST_DEBUG_OBJECT (interaudiosrc, "create ts %" GST_TIME_FORMAT,

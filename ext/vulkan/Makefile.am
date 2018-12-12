@@ -1,7 +1,7 @@
 plugin_LTLIBRARIES = libgstvulkan.la
 
 SUBDIRS =
-DIST_SUBDIRS = xcb
+DIST_SUBDIRS = xcb wayland
 DISTCLEANFILES = vkconfig.h
 
 libgstvulkan_la_SOURCES = \
@@ -9,12 +9,14 @@ libgstvulkan_la_SOURCES = \
 	vkdevice.c \
 	vkdisplay.c \
 	vkerror.c \
+	vkfence.c \
 	vkbuffermemory.c \
 	vkimagememory.c \
 	vkbufferpool.c \
 	vkinstance.c \
 	vkmemory.c \
 	vkqueue.c \
+	vktrash.c \
 	vksink.c \
 	vkswapper.c \
 	vkupload.c \
@@ -31,11 +33,13 @@ noinst_HEADERS = \
 	vkdevice.h \
 	vkdisplay.h \
 	vkerror.h \
+	vkfence.h \
 	vkimagememory.h \
 	vkinstance.h \
 	vkmacros.h \
 	vkmemory.h \
 	vkqueue.h \
+	vktrash.h \
 	vksink.h \
 	vkswapper.h \
 	vkupload.h \
@@ -63,7 +67,11 @@ SUBDIRS += xcb
 libgstvulkan_la_LIBADD += xcb/libgstvulkan-xcb.la
 endif
 
+if USE_WAYLAND
+SUBDIRS += wayland
+libgstvulkan_la_LIBADD += wayland/libgstvulkan-wayland.la
+endif
+
 libgstvulkan_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS)
-libgstvulkan_la_LIBTOOLFLAGS = $(GST_PLUGIN_LIBTOOLFLAGS)
 
 

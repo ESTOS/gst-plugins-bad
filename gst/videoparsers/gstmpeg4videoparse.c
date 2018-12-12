@@ -154,10 +154,8 @@ gst_mpeg4vparse_class_init (GstMpeg4VParseClass * klass)
           0, 3600, DEFAULT_CONFIG_INTERVAL,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&src_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sink_template));
+  gst_element_class_add_static_pad_template (element_class, &src_template);
+  gst_element_class_add_static_pad_template (element_class, &sink_template);
 
   gst_element_class_set_static_metadata (element_class,
       "MPEG 4 video elementary stream parser", "Codec/Parser/Video",
@@ -320,15 +318,7 @@ gst_mpeg4vparse_process_sc (GstMpeg4VParse * mp4vparse, GstMpeg4Packet * packet,
    * except for final VOS end sequence code included in last VOP-frame */
   if (mp4vparse->vop_offset >= 0 &&
       packet->type != GST_MPEG4_VISUAL_OBJ_SEQ_END) {
-    if (G_LIKELY (size > mp4vparse->vop_offset + 1)) {
-      mp4vparse->intra_frame =
-          ((packet->data[mp4vparse->vop_offset + 1] >> 6 & 0x3) == 0);
-    } else {
-      GST_WARNING_OBJECT (mp4vparse, "no data following VOP startcode");
-      mp4vparse->intra_frame = FALSE;
-    }
-    GST_LOG_OBJECT (mp4vparse, "ending frame of size %d, is intra %d",
-        packet->offset - 3, mp4vparse->intra_frame);
+    GST_LOG_OBJECT (mp4vparse, "ending frame of size %d", packet->offset - 3);
     return TRUE;
   }
 
@@ -629,10 +619,24 @@ gst_mpeg4vparse_parse_frame (GstBaseParse * parse, GstBaseParseFrame * frame)
 {
   GstMpeg4VParse *mp4vparse = GST_MPEG4VIDEO_PARSE (parse);
   GstBuffer *buffer = frame->buffer;
+  GstMapInfo map;
+  gboolean intra = FALSE;
 
   gst_mpeg4vparse_update_src_caps (mp4vparse);
 
-  if (mp4vparse->intra_frame)
+  /* let's live up to our function name and really parse something here
+   * (which ensures it is done for all frames, whether drained or not);
+   * determine intra frame */
+  gst_buffer_map (frame->buffer, &map, GST_MAP_READ);
+  if (G_LIKELY (map.size > mp4vparse->vop_offset + 1)) {
+    intra = ((map.data[mp4vparse->vop_offset + 1] >> 6 & 0x3) == 0);
+    GST_DEBUG_OBJECT (mp4vparse, "frame intra = %d", intra);
+  } else {
+    GST_WARNING_OBJECT (mp4vparse, "no data following VOP startcode");
+  }
+  gst_buffer_unmap (frame->buffer, &map);
+
+  if (intra)
     GST_BUFFER_FLAG_UNSET (buffer, GST_BUFFER_FLAG_DELTA_UNIT);
   else
     GST_BUFFER_FLAG_SET (buffer, GST_BUFFER_FLAG_DELTA_UNIT);

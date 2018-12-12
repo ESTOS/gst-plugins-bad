@@ -93,6 +93,7 @@ extern "C"
 GST_DEBUG_CATEGORY_STATIC (gst_grabcut_debug);
 #define GST_CAT_DEFAULT gst_grabcut_debug
 
+using namespace cv;
 /* Filter signals and args */
 enum
 {
@@ -110,7 +111,7 @@ enum
 #define DEFAULT_TEST_MODE FALSE
 #define DEFAULT_SCALE 1.6
 
-G_DEFINE_TYPE (GstGrabcut, gst_grabcut, GST_TYPE_VIDEO_FILTER);
+G_DEFINE_TYPE (GstGrabcut, gst_grabcut, GST_TYPE_OPENCV_VIDEO_FILTER);
 static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
@@ -127,11 +128,11 @@ static void gst_grabcut_set_property (GObject * object, guint prop_id,
 static void gst_grabcut_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 
-static GstFlowReturn gst_grabcut_transform_ip (GstVideoFilter * btrans,
-    GstVideoFrame * frame);
-static gboolean gst_grabcut_set_info (GstVideoFilter * filter,
-    GstCaps * incaps, GstVideoInfo * in_info,
-    GstCaps * outcaps, GstVideoInfo * out_info);
+static GstFlowReturn gst_grabcut_transform_ip (GstOpencvVideoFilter * filter,
+    GstBuffer * buf, IplImage * img);
+static gboolean gst_grabcut_set_caps (GstOpencvVideoFilter * filter,
+    gint in_width, gint in_height, gint in_depth, gint in_channels,
+    gint out_width, gint out_height, gint out_depth, gint out_channels);
 
 static void gst_grabcut_release_all_pointers (GstGrabcut * filter);
 
@@ -152,8 +153,9 @@ gst_grabcut_class_init (GstGrabcutClass * klass)
 {
   GObjectClass *gobject_class = (GObjectClass *) klass;
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
+  GstOpencvVideoFilterClass *cvbasefilter_class =
+      (GstOpencvVideoFilterClass *) klass;
   GstBaseTransformClass *btrans_class = (GstBaseTransformClass *) klass;
-  GstVideoFilterClass *video_class = (GstVideoFilterClass *) klass;
 
   gobject_class->set_property = gst_grabcut_set_property;
   gobject_class->get_property = gst_grabcut_get_property;
@@ -161,8 +163,8 @@ gst_grabcut_class_init (GstGrabcutClass * klass)
   btrans_class->stop = gst_grabcut_stop;
   btrans_class->passthrough_on_same_caps = TRUE;
 
-  video_class->transform_frame_ip = gst_grabcut_transform_ip;
-  video_class->set_info = gst_grabcut_set_info;
+  cvbasefilter_class->cv_trans_ip_func = gst_grabcut_transform_ip;
+  cvbasefilter_class->cv_set_caps = gst_grabcut_set_caps;
 
   g_object_class_install_property (gobject_class, PROP_TEST_MODE,
       g_param_spec_boolean ("test-mode", "test-mode",
@@ -184,10 +186,8 @@ IN CASE OF no alpha mask input (all 0's or all 1's), the 'face' \
 downstream event is used to create a bbox of PR_FG elements.\n\
 IF nothing is present, then nothing is done.", "Miguel Casas-Sanchez <miguelecasassanchez@gmail.com>");
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&src_factory));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sink_factory));
+  gst_element_class_add_static_pad_template (element_class, &src_factory);
+  gst_element_class_add_static_pad_template (element_class, &sink_factory);
 }
 
 
@@ -201,7 +201,8 @@ gst_grabcut_init (GstGrabcut * filter)
 {
   filter->test_mode = DEFAULT_TEST_MODE;
   filter->scale = DEFAULT_SCALE;
-  gst_base_transform_set_in_place (GST_BASE_TRANSFORM (filter), FALSE);
+  gst_opencv_video_filter_set_in_place (GST_OPENCV_VIDEO_FILTER (filter),
+      TRUE);
 }
 
 
@@ -246,20 +247,20 @@ gst_grabcut_get_property (GObject * object, guint prop_id,
 /* GstElement vmethod implementations */
 /* this function handles the link with other elements */
 static gboolean
-gst_grabcut_set_info (GstVideoFilter * filter,
-    GstCaps * incaps, GstVideoInfo * in_info,
-    GstCaps * outcaps, GstVideoInfo * out_info)
+gst_grabcut_set_caps (GstOpencvVideoFilter * filter, gint in_width,
+    gint in_height, gint in_depth, gint in_channels, gint out_width,
+    gint out_height, gint out_depth, gint out_channels)
 {
   GstGrabcut *grabcut = GST_GRABCUT (filter);
   CvSize size;
 
-  size = cvSize (in_info->width, in_info->height);
-  /* If cvRGBA is already allocated, it means there's a cap modification,
-     so release first all the images.                                      */
-  if (NULL != grabcut->cvRGBAin)
+  size = cvSize (in_width, in_height);
+
+  /* If cvRGB is already allocated, it means there's a cap modification,
+   * so release first all the images. */
+  if (!grabcut->cvRGBin)
     gst_grabcut_release_all_pointers (grabcut);
 
-  grabcut->cvRGBAin = cvCreateImageHeader (size, IPL_DEPTH_8U, 4);
   grabcut->cvRGBin = cvCreateImage (size, IPL_DEPTH_8U, 3);
 
   grabcut->cvA = cvCreateImage (size, IPL_DEPTH_8U, 1);
@@ -280,7 +281,7 @@ gst_grabcut_stop (GstBaseTransform * basesrc)
 {
   GstGrabcut *filter = GST_GRABCUT (basesrc);
 
-  if (filter->cvRGBAin != NULL)
+  if (filter->cvRGBin != NULL)
     gst_grabcut_release_all_pointers (filter);
 
   return TRUE;
@@ -289,7 +290,6 @@ gst_grabcut_stop (GstBaseTransform * basesrc)
 static void
 gst_grabcut_release_all_pointers (GstGrabcut * filter)
 {
-  cvReleaseImage (&filter->cvRGBAin);
   cvReleaseImage (&filter->cvRGBin);
 
   cvReleaseImage (&filter->cvA);
@@ -301,27 +301,26 @@ gst_grabcut_release_all_pointers (GstGrabcut * filter)
 }
 
 static GstFlowReturn
-gst_grabcut_transform_ip (GstVideoFilter * btrans, GstVideoFrame * frame)
+gst_grabcut_transform_ip (GstOpencvVideoFilter * filter, GstBuffer * buffer,
+        IplImage * img)
 {
-  GstGrabcut *gc = GST_GRABCUT (btrans);
+  GstGrabcut *gc = GST_GRABCUT (filter);
   gint alphapixels;
 
   GstVideoRegionOfInterestMeta *meta;
-  meta = gst_buffer_get_video_region_of_interest_meta (frame->buffer);
+  meta = gst_buffer_get_video_region_of_interest_meta (buffer);
   if (meta) {
     gc->facepos.x = (meta->x) - ((gc->scale - 1) * meta->w / 2);
     gc->facepos.y = (meta->y) - ((gc->scale - 1) * meta->h / 2);
     gc->facepos.width = meta->w * gc->scale * 0.9;
     gc->facepos.height = meta->h * gc->scale * 1.1;
   } else {
-    memset (&(gc->facepos), 0, sizeof (gc->facepos));
+    memset (static_cast<void*>(&(gc->facepos)), 0, sizeof (gc->facepos));
   }
 
-  gc->cvRGBAin->imageData = (char *) GST_VIDEO_FRAME_COMP_DATA (frame, 0);
-
   /*  normally input should be RGBA */
-  cvSplit (gc->cvRGBAin, gc->cvA, gc->cvB, gc->cvC, gc->cvD);
-  cvCvtColor (gc->cvRGBAin, gc->cvRGBin, CV_BGRA2BGR);
+  cvSplit (img, gc->cvA, gc->cvB, gc->cvC, gc->cvD);
+  cvCvtColor (img, gc->cvRGBin, CV_BGRA2BGR);
   compose_matrix_from_image (gc->grabcut_mask, gc->cvD);
 
   /*  Pass cvD to grabcut_mask for the graphcut stuff but that only if
@@ -356,10 +355,10 @@ gst_grabcut_transform_ip (GstVideoFilter * btrans, GstVideoFrame * frame)
     cvAnd (gc->grabcut_mask, gc->cvC, gc->cvC, NULL);
   }
 
-  cvMerge (gc->cvA, gc->cvB, gc->cvC, gc->cvD, gc->cvRGBAin);
+  cvMerge (gc->cvA, gc->cvB, gc->cvC, gc->cvD, img);
 
   if (gc->test_mode) {
-    cvRectangle (gc->cvRGBAin,
+    cvRectangle (img,
         cvPoint (gc->facepos.x, gc->facepos.y),
         cvPoint (gc->facepos.x + gc->facepos.width,
             gc->facepos.y + gc->facepos.height), CV_RGB (255, 0, 255), 1, 8, 0);
@@ -394,8 +393,8 @@ compose_matrix_from_image (CvMat * output, IplImage * input)
   for (x = 0; x < output->cols; x++) {
     for (y = 0; y < output->rows; y++) {
       CV_MAT_ELEM (*output, uchar, y, x) =
-          (cvGetReal2D (input, y, x) <= cv::GC_PR_FGD) ? cvGetReal2D (input, y,
-          x) : cv::GC_PR_FGD;
+          (cvGetReal2D (input, y, x) <= GC_PR_FGD) ? cvGetReal2D (input, y,
+          x) : GC_PR_FGD;
     }
   }
 }
@@ -405,10 +404,10 @@ int
 initialise_grabcut (struct grabcut_params *GC, IplImage * image_c,
     CvMat * mask_c)
 {
-  GC->image = (void *) new cv::Mat (image_c, false);    /*  "true" refers to copydata */
-  GC->mask = (void *) new cv::Mat (mask_c, false);
-  GC->bgdModel = (void *) new cv::Mat ();       /*  "true" refers to copydata */
-  GC->fgdModel = (void *) new cv::Mat ();
+  GC->image = (void *) new Mat (cvarrToMat (image_c, false));    /*  "true" refers to copydata */
+  GC->mask = (void *) new Mat (cvarrToMat (mask_c, false));
+  GC->bgdModel = (void *) new Mat ();       /*  "true" refers to copydata */
+  GC->fgdModel = (void *) new Mat ();
 
   return (0);
 }
@@ -417,13 +416,13 @@ int
 run_grabcut_iteration (struct grabcut_params *GC, IplImage * image_c,
     CvMat * mask_c, CvRect * bbox)
 {
-  ((cv::Mat *) GC->image)->data = (uchar *) image_c->imageData;
-  ((cv::Mat *) GC->mask)->data = mask_c->data.ptr;
+  ((Mat *) GC->image)->data = (uchar *) image_c->imageData;
+  ((Mat *) GC->mask)->data = mask_c->data.ptr;
 
   if (cvCountNonZero (mask_c))
-    grabCut (*((cv::Mat *) GC->image), *((cv::Mat *) GC->mask), cv::Rect (),
-        *((cv::Mat *) GC->bgdModel), *((cv::Mat *) GC->fgdModel), 1,
-        cv::GC_INIT_WITH_MASK);
+    grabCut (*((Mat *) GC->image), *((Mat *) GC->mask), Rect (),
+        *((Mat *) GC->bgdModel), *((Mat *) GC->fgdModel), 1,
+        GC_INIT_WITH_MASK);
 
   return (0);
 }
@@ -432,12 +431,11 @@ int
 run_grabcut_iteration2 (struct grabcut_params *GC, IplImage * image_c,
     CvMat * mask_c, CvRect * bbox)
 {
-  ((cv::Mat *) GC->image)->data = (uchar *) image_c->imageData;
-  ((cv::Mat *) GC->mask)->data = mask_c->data.ptr;
-
-  grabCut (*((cv::Mat *) GC->image), *((cv::Mat *) GC->mask), *(bbox),
-      *((cv::Mat *) GC->bgdModel), *((cv::Mat *) GC->fgdModel), 1,
-      cv::GC_INIT_WITH_RECT);
+  ((Mat *) GC->image)->data = (uchar *) image_c->imageData;
+  ((Mat *) GC->mask)->data = mask_c->data.ptr;
+  grabCut (*((Mat *) GC->image), *((Mat *) GC->mask), *(bbox),
+      *((Mat *) GC->bgdModel), *((Mat *) GC->fgdModel), 1,
+      GC_INIT_WITH_RECT);
 
   return (0);
 }
@@ -445,10 +443,10 @@ run_grabcut_iteration2 (struct grabcut_params *GC, IplImage * image_c,
 int
 finalise_grabcut (struct grabcut_params *GC)
 {
-  delete ((cv::Mat *) GC->image);
-  delete ((cv::Mat *) GC->mask);
-  delete ((cv::Mat *) GC->bgdModel);
-  delete ((cv::Mat *) GC->fgdModel);
+  delete ((Mat *) GC->image);
+  delete ((Mat *) GC->mask);
+  delete ((Mat *) GC->bgdModel);
+  delete ((Mat *) GC->fgdModel);
 
   return (0);
 }

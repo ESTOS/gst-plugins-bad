@@ -50,10 +50,99 @@
 #define parent_class gst_nv_base_enc_parent_class
 G_DEFINE_ABSTRACT_TYPE (GstNvBaseEnc, gst_nv_base_enc, GST_TYPE_VIDEO_ENCODER);
 
+#define GST_TYPE_NV_PRESET (gst_nv_preset_get_type())
+static GType
+gst_nv_preset_get_type (void)
+{
+  static GType nv_preset_type = 0;
+
+  static const GEnumValue presets[] = {
+    {GST_NV_PRESET_DEFAULT, "Default", "default"},
+    {GST_NV_PRESET_HP, "High Performance", "hp"},
+    {GST_NV_PRESET_HQ, "High Quality", "hq"},
+/*    {GST_NV_PRESET_BD, "BD", "bd"}, */
+    {GST_NV_PRESET_LOW_LATENCY_DEFAULT, "Low Latency", "low-latency"},
+    {GST_NV_PRESET_LOW_LATENCY_HQ, "Low Latency, High Quality",
+        "low-latency-hq"},
+    {GST_NV_PRESET_LOW_LATENCY_HP, "Low Latency, High Performance",
+        "low-latency-hp"},
+    {GST_NV_PRESET_LOSSLESS_DEFAULT, "Lossless", "lossless"},
+    {GST_NV_PRESET_LOSSLESS_HP, "Lossless, High Performance", "lossless-hp"},
+    {0, NULL, NULL},
+  };
+
+  if (!nv_preset_type) {
+    nv_preset_type = g_enum_register_static ("GstNvPreset", presets);
+  }
+  return nv_preset_type;
+}
+
+static GUID
+_nv_preset_to_guid (GstNvPreset preset)
+{
+  GUID null = { 0, };
+
+  switch (preset) {
+#define CASE(gst,nv) case G_PASTE(GST_NV_PRESET_,gst): return G_PASTE(G_PASTE(NV_ENC_PRESET_,nv),_GUID)
+      CASE (DEFAULT, DEFAULT);
+      CASE (HP, HP);
+      CASE (HQ, HQ);
+/*    CASE (BD, BD);*/
+      CASE (LOW_LATENCY_DEFAULT, LOW_LATENCY_DEFAULT);
+      CASE (LOW_LATENCY_HQ, LOW_LATENCY_HQ);
+      CASE (LOW_LATENCY_HP, LOW_LATENCY_HQ);
+      CASE (LOSSLESS_DEFAULT, LOSSLESS_DEFAULT);
+      CASE (LOSSLESS_HP, LOSSLESS_HP);
+#undef CASE
+    default:
+      return null;
+  }
+}
+
+#define GST_TYPE_NV_RC_MODE (gst_nv_rc_mode_get_type())
+static GType
+gst_nv_rc_mode_get_type (void)
+{
+  static GType nv_rc_mode_type = 0;
+
+  static const GEnumValue modes[] = {
+    {GST_NV_RC_MODE_DEFAULT, "Default (from NVENC preset)", "default"},
+    {GST_NV_RC_MODE_CONSTQP, "Constant Quantization", "constqp"},
+    {GST_NV_RC_MODE_CBR, "Constant Bit Rate", "cbr"},
+    {GST_NV_RC_MODE_VBR, "Variable Bit Rate", "vbr"},
+    {GST_NV_RC_MODE_VBR_MINQP,
+          "Variable Bit Rate (with minimum quantization parameter)",
+        "vbr-minqp"},
+    {0, NULL, NULL},
+  };
+
+  if (!nv_rc_mode_type) {
+    nv_rc_mode_type = g_enum_register_static ("GstNvRCMode", modes);
+  }
+  return nv_rc_mode_type;
+}
+
+static NV_ENC_PARAMS_RC_MODE
+_rc_mode_to_nv (GstNvRCMode mode)
+{
+  switch (mode) {
+    case GST_NV_RC_MODE_DEFAULT:
+      return -1;
+#define CASE(gst,nv) case G_PASTE(GST_NV_RC_MODE_,gst): return G_PASTE(NV_ENC_PARAMS_RC_,nv)
+      CASE (CONSTQP, CONSTQP);
+      CASE (CBR, CBR);
+      CASE (VBR, VBR);
+      CASE (VBR_MINQP, VBR_MINQP);
+#undef CASE
+    default:
+      return -1;
+  }
+}
+
 static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS ("video/x-raw, " "format = (string) NV12, " // TODO: I420, YV12, Y444 support
+    GST_STATIC_CAPS ("video/x-raw, " "format = (string) { NV12, I420 }, "       // TODO: YV12, Y444 support
         "width = (int) [ 16, 4096 ], height = (int) [ 16, 2160 ], "
         "framerate = (fraction) [0, MAX],"
         "interlace-mode = { progressive, mixed, interleaved } "
@@ -71,7 +160,22 @@ enum
 {
   PROP_0,
   PROP_DEVICE_ID,
+  PROP_PRESET,
+  PROP_BITRATE,
+  PROP_RC_MODE,
+  PROP_QP_MIN,
+  PROP_QP_MAX,
+  PROP_QP_CONST,
+  PROP_GOP_SIZE,
 };
+
+#define DEFAULT_PRESET GST_NV_PRESET_DEFAULT
+#define DEFAULT_BITRATE 0
+#define DEFAULT_RC_MODE GST_NV_RC_MODE_DEFAULT
+#define DEFAULT_QP_MIN -1
+#define DEFAULT_QP_MAX -1
+#define DEFAULT_QP_CONST -1
+#define DEFAULT_GOP_SIZE 75
 
 /* This lock is needed to prevent the situation where multiple encoders are
  * initialised at the same time which appears to cause excessive CPU usage over
@@ -120,6 +224,7 @@ static void gst_nv_base_enc_get_property (GObject * object, guint prop_id,
 static void gst_nv_base_enc_finalize (GObject * obj);
 static GstCaps *gst_nv_base_enc_getcaps (GstVideoEncoder * enc,
     GstCaps * filter);
+static gboolean gst_nv_base_enc_stop_bitstream_thread (GstNvBaseEnc * nvenc);
 
 static void
 gst_nv_base_enc_class_init (GstNvBaseEncClass * klass)
@@ -147,14 +252,52 @@ gst_nv_base_enc_class_init (GstNvBaseEncClass * klass)
   videoenc_class->finish = GST_DEBUG_FUNCPTR (gst_nv_base_enc_finish);
   videoenc_class->sink_query = GST_DEBUG_FUNCPTR (gst_nv_base_enc_sink_query);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sink_factory));
+  gst_element_class_add_static_pad_template (element_class, &sink_factory);
 
   g_object_class_install_property (gobject_class, PROP_DEVICE_ID,
       g_param_spec_uint ("cuda-device-id",
           "Cuda Device ID",
           "Set the GPU device to use for operations",
           0, G_MAXUINT, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_PRESET,
+      g_param_spec_enum ("preset", "Encoding Preset",
+          "Encoding Preset",
+          GST_TYPE_NV_PRESET, DEFAULT_PRESET,
+          G_PARAM_READWRITE | GST_PARAM_MUTABLE_PLAYING |
+          G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_RC_MODE,
+      g_param_spec_enum ("rc-mode", "RC Mode", "Rate Control Mode",
+          GST_TYPE_NV_RC_MODE, DEFAULT_RC_MODE,
+          G_PARAM_READWRITE | GST_PARAM_MUTABLE_PLAYING |
+          G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_QP_MIN,
+      g_param_spec_int ("qp-min", "Minimum Quantizer",
+          "Minimum quantizer (-1 = from NVENC preset)", -1, 51, DEFAULT_QP_MIN,
+          G_PARAM_READWRITE | GST_PARAM_MUTABLE_PLAYING |
+          G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_QP_MAX,
+      g_param_spec_int ("qp-max", "Maximum Quantizer",
+          "Maximum quantizer (-1 = from NVENC preset)", -1, 51, DEFAULT_QP_MAX,
+          G_PARAM_READWRITE | GST_PARAM_MUTABLE_PLAYING |
+          G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_QP_CONST,
+      g_param_spec_int ("qp-const", "Constant Quantizer",
+          "Constant quantizer (-1 = from NVENC preset)", -1, 51,
+          DEFAULT_QP_CONST,
+          G_PARAM_READWRITE | GST_PARAM_MUTABLE_PLAYING |
+          G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_GOP_SIZE,
+      g_param_spec_int ("gop-size", "GOP size",
+          "Number of frames between intra frames (-1 = infinite)",
+          -1, G_MAXINT, DEFAULT_GOP_SIZE,
+          (GParamFlags) (G_PARAM_READWRITE | GST_PARAM_MUTABLE_PLAYING |
+              G_PARAM_STATIC_STRINGS)));
+  g_object_class_install_property (gobject_class, PROP_BITRATE,
+      g_param_spec_uint ("bitrate", "Bitrate",
+          "Bitrate in kbit/sec (0 = from NVENC preset)", 0, 2000 * 1024,
+          DEFAULT_BITRATE,
+          G_PARAM_READWRITE | GST_PARAM_MUTABLE_PLAYING |
+          G_PARAM_STATIC_STRINGS));
 }
 
 static gboolean
@@ -330,8 +473,7 @@ gst_nv_base_enc_sink_query (GstVideoEncoder * enc, GstQuery * query)
       gboolean ret;
 
       ret = gst_gl_handle_context_query ((GstElement *) nvenc, query,
-          (GstGLDisplay **) & nvenc->display,
-          (GstGLContext **) & nvenc->other_context);
+          nvenc->display, NULL, nvenc->other_context);
       if (nvenc->display)
         gst_gl_display_filter_gl_api (GST_GL_DISPLAY (nvenc->display),
             SUPPORTED_GL_APIS);
@@ -377,6 +519,8 @@ static gboolean
 gst_nv_base_enc_stop (GstVideoEncoder * enc)
 {
   GstNvBaseEnc *nvenc = GST_NV_BASE_ENC (enc);
+
+  gst_nv_base_enc_stop_bitstream_thread (nvenc);
 
   gst_nv_base_enc_free_buffers (nvenc);
 
@@ -517,6 +661,15 @@ static void
 gst_nv_base_enc_init (GstNvBaseEnc * nvenc)
 {
   GstVideoEncoder *encoder = GST_VIDEO_ENCODER (nvenc);
+
+  nvenc->preset_enum = DEFAULT_PRESET;
+  nvenc->selected_preset = _nv_preset_to_guid (nvenc->preset_enum);
+  nvenc->rate_control_mode = DEFAULT_RC_MODE;
+  nvenc->qp_min = DEFAULT_QP_MIN;
+  nvenc->qp_max = DEFAULT_QP_MAX;
+  nvenc->qp_const = DEFAULT_QP_CONST;
+  nvenc->bitrate = DEFAULT_BITRATE;
+  nvenc->gop_size = DEFAULT_GOP_SIZE;
 
   GST_VIDEO_ENCODER_STREAM_LOCK (encoder);
   GST_VIDEO_ENCODER_STREAM_UNLOCK (encoder);
@@ -910,22 +1063,172 @@ gst_nv_base_enc_set_format (GstVideoEncoder * enc, GstVideoCodecState * state)
   GstNvBaseEnc *nvenc = GST_NV_BASE_ENC (enc);
   GstVideoInfo *info = &state->info;
   GstVideoCodecState *old_state = nvenc->input_state;
+  NV_ENC_RECONFIGURE_PARAMS reconfigure_params = { 0, };
+  NV_ENC_INITIALIZE_PARAMS init_params = { 0, };
+  NV_ENC_INITIALIZE_PARAMS *params;
+  NV_ENC_PRESET_CONFIG preset_config = { 0, };
   NVENCSTATUS nv_ret;
 
-  g_assert (nvenc_class->initialize_encoder);
+  g_atomic_int_set (&nvenc->reconfig, FALSE);
+
+  if (old_state) {
+    reconfigure_params.version = NV_ENC_RECONFIGURE_PARAMS_VER;
+    params = &reconfigure_params.reInitEncodeParams;
+  } else {
+    params = &init_params;
+  }
+
+  params->version = NV_ENC_INITIALIZE_PARAMS_VER;
+  params->encodeGUID = nvenc_class->codec_id;
+  params->encodeWidth = GST_VIDEO_INFO_WIDTH (info);
+  params->encodeHeight = GST_VIDEO_INFO_HEIGHT (info);
+
+  {
+    guint32 n_presets;
+    GUID *presets;
+    guint32 i;
+
+    nv_ret =
+        NvEncGetEncodePresetCount (nvenc->encoder,
+        params->encodeGUID, &n_presets);
+    if (nv_ret != NV_ENC_SUCCESS) {
+      GST_ELEMENT_ERROR (nvenc, LIBRARY, SETTINGS, (NULL),
+          ("Failed to get encoder presets"));
+      return FALSE;
+    }
+
+    presets = g_new0 (GUID, n_presets);
+    nv_ret =
+        NvEncGetEncodePresetGUIDs (nvenc->encoder,
+        params->encodeGUID, presets, n_presets, &n_presets);
+    if (nv_ret != NV_ENC_SUCCESS) {
+      GST_ELEMENT_ERROR (nvenc, LIBRARY, SETTINGS, (NULL),
+          ("Failed to get encoder presets"));
+      g_free (presets);
+      return FALSE;
+    }
+
+    for (i = 0; i < n_presets; i++) {
+      if (gst_nvenc_cmp_guid (presets[i], nvenc->selected_preset))
+        break;
+    }
+    g_free (presets);
+    if (i >= n_presets) {
+      GST_ELEMENT_ERROR (nvenc, LIBRARY, SETTINGS, (NULL),
+          ("Selected preset not supported"));
+      return FALSE;
+    }
+
+    params->presetGUID = nvenc->selected_preset;
+  }
+
+  params->enablePTD = 1;
+  if (!old_state) {
+    /* this sets the required buffer size and the maximum allowed size on
+     * subsequent reconfigures */
+    /* FIXME: propertise this */
+    params->maxEncodeWidth = GST_VIDEO_INFO_WIDTH (info);
+    params->maxEncodeHeight = GST_VIDEO_INFO_HEIGHT (info);
+    gst_nv_base_enc_set_max_encode_size (nvenc, params->maxEncodeWidth,
+        params->maxEncodeHeight);
+  } else {
+    guint max_width, max_height;
+
+    gst_nv_base_enc_get_max_encode_size (nvenc, &max_width, &max_height);
+
+    if (GST_VIDEO_INFO_WIDTH (info) > max_width
+        || GST_VIDEO_INFO_HEIGHT (info) > max_height) {
+      GST_ELEMENT_ERROR (nvenc, STREAM, FORMAT, ("%s", "Requested stream "
+              "size is larger than the maximum configured size"), (NULL));
+      return FALSE;
+    }
+  }
+
+  preset_config.version = NV_ENC_PRESET_CONFIG_VER;
+  preset_config.presetCfg.version = NV_ENC_CONFIG_VER;
+
+  nv_ret =
+      NvEncGetEncodePresetConfig (nvenc->encoder,
+      params->encodeGUID, params->presetGUID, &preset_config);
+  if (nv_ret != NV_ENC_SUCCESS) {
+    GST_ELEMENT_ERROR (nvenc, LIBRARY, SETTINGS, (NULL),
+        ("Failed to get encode preset configuration: %d", nv_ret));
+    return FALSE;
+  }
+
+  params->encodeConfig = &preset_config.presetCfg;
+
+  if (GST_VIDEO_INFO_IS_INTERLACED (info)) {
+    if (GST_VIDEO_INFO_INTERLACE_MODE (info) ==
+        GST_VIDEO_INTERLACE_MODE_INTERLEAVED
+        || GST_VIDEO_INFO_INTERLACE_MODE (info) ==
+        GST_VIDEO_INTERLACE_MODE_MIXED) {
+      preset_config.presetCfg.frameFieldMode =
+          NV_ENC_PARAMS_FRAME_FIELD_MODE_FIELD;
+    }
+  }
+
+  if (info->fps_d > 0 && info->fps_n > 0) {
+    params->frameRateNum = info->fps_n;
+    params->frameRateDen = info->fps_d;
+  } else {
+    GST_FIXME_OBJECT (nvenc, "variable framerate");
+  }
+
+  if (nvenc->rate_control_mode != GST_NV_RC_MODE_DEFAULT) {
+    params->encodeConfig->rcParams.rateControlMode =
+        _rc_mode_to_nv (nvenc->rate_control_mode);
+    if (nvenc->bitrate > 0) {
+      /* FIXME: this produces larger bitrates?! */
+      params->encodeConfig->rcParams.averageBitRate = nvenc->bitrate * 1024;
+      params->encodeConfig->rcParams.maxBitRate = nvenc->bitrate * 1024;
+    }
+    if (nvenc->qp_const > 0) {
+      params->encodeConfig->rcParams.constQP.qpInterB = nvenc->qp_const;
+      params->encodeConfig->rcParams.constQP.qpInterP = nvenc->qp_const;
+      params->encodeConfig->rcParams.constQP.qpIntra = nvenc->qp_const;
+    }
+    if (nvenc->qp_min >= 0) {
+      params->encodeConfig->rcParams.enableMinQP = 1;
+      params->encodeConfig->rcParams.minQP.qpInterB = nvenc->qp_min;
+      params->encodeConfig->rcParams.minQP.qpInterP = nvenc->qp_min;
+      params->encodeConfig->rcParams.minQP.qpIntra = nvenc->qp_min;
+    }
+    if (nvenc->qp_max >= 0) {
+      params->encodeConfig->rcParams.enableMaxQP = 1;
+      params->encodeConfig->rcParams.maxQP.qpInterB = nvenc->qp_max;
+      params->encodeConfig->rcParams.maxQP.qpInterP = nvenc->qp_max;
+      params->encodeConfig->rcParams.maxQP.qpIntra = nvenc->qp_max;
+    }
+  }
+
+  if (nvenc->gop_size < 0) {
+    params->encodeConfig->gopLength = NVENC_INFINITE_GOPLENGTH;
+    params->encodeConfig->frameIntervalP = 1;
+  } else if (nvenc->gop_size > 0) {
+    params->encodeConfig->gopLength = nvenc->gop_size;
+  }
+
+  g_assert (nvenc_class->set_encoder_config);
+  if (!nvenc_class->set_encoder_config (nvenc, state, params->encodeConfig)) {
+    GST_ERROR_OBJECT (enc, "Subclass failed to set encoder configuration");
+    return FALSE;
+  }
 
   G_LOCK (initialization_lock);
-  if (!nvenc_class->initialize_encoder (nvenc, old_state, state)) {
-    GST_ERROR_OBJECT (enc, "Subclass failed to reconfigure encoder");
-    G_UNLOCK (initialization_lock);
-    return FALSE;
+  if (old_state) {
+    nv_ret = NvEncReconfigureEncoder (nvenc->encoder, &reconfigure_params);
+  } else {
+    nv_ret = NvEncInitializeEncoder (nvenc->encoder, params);
   }
   G_UNLOCK (initialization_lock);
 
-  if (!nvenc->max_encode_width && !nvenc->max_encode_height) {
-    gst_nv_base_enc_set_max_encode_size (nvenc, GST_VIDEO_INFO_WIDTH (info),
-        GST_VIDEO_INFO_HEIGHT (info));
+  if (nv_ret != NV_ENC_SUCCESS) {
+    GST_ELEMENT_ERROR (nvenc, LIBRARY, SETTINGS, (NULL),
+        ("Failed to %sinit encoder: %d", old_state ? "re" : "", nv_ret));
+    return FALSE;
   }
+  GST_INFO_OBJECT (nvenc, "configured encoder");
 
   if (!old_state) {
     nvenc->input_info = *info;
@@ -1209,9 +1512,8 @@ _map_gl_input_buffer (GstGLContext * context, struct map_gl_input *data)
     }
 
     cuda_ret =
-        cudaGraphicsResourceGetMappedPointer (&data->
-        in_gl_resource->cuda_plane_pointers[i],
-        &data->in_gl_resource->cuda_num_bytes,
+        cudaGraphicsResourceGetMappedPointer (&data->in_gl_resource->
+        cuda_plane_pointers[i], &data->in_gl_resource->cuda_num_bytes,
         data->in_gl_resource->cuda_texture);
     if (cuda_ret != cudaSuccess) {
       GST_ERROR_OBJECT (data->nvenc, "failed to get mapped pointer of map GL "
@@ -1350,11 +1652,15 @@ gst_nv_base_enc_handle_frame (GstVideoEncoder * enc, GstVideoCodecFrame * frame)
   GstVideoInfo *info = &nvenc->input_state->info;
   GstFlowReturn flow = GST_FLOW_OK;
   GstMapFlags in_map_flags = GST_MAP_READ;
-  struct frame_state *state;
+  struct frame_state *state = NULL;
   guint frame_n = 0;
 
   g_assert (nvenc->encoder != NULL);
 
+  if (g_atomic_int_compare_and_exchange (&nvenc->reconfig, TRUE, FALSE)) {
+    if (!gst_nv_base_enc_set_format (enc, nvenc->input_state))
+      return GST_FLOW_ERROR;
+  }
 #if HAVE_NVENC_GST_GL
   if (nvenc->gl_input)
     in_map_flags |= GST_MAP_GL;
@@ -1371,9 +1677,9 @@ gst_nv_base_enc_handle_frame (GstVideoEncoder * enc, GstVideoCodecFrame * frame)
 
   flow = _acquire_input_buffer (nvenc, &input_buffer);
   if (flow != GST_FLOW_OK)
-    return flow;
+    goto out;
   if (input_buffer == NULL)
-    return GST_FLOW_ERROR;
+    goto error;
 
   state = frame->user_data;
   if (!state)
@@ -1460,9 +1766,6 @@ gst_nv_base_enc_handle_frame (GstVideoEncoder * enc, GstVideoCodecFrame * frame)
     width = GST_VIDEO_FRAME_WIDTH (&vframe);
     height = GST_VIDEO_FRAME_HEIGHT (&vframe);
 
-    // FIXME: this only works for NV12
-    g_assert (GST_VIDEO_FRAME_FORMAT (&vframe) == GST_VIDEO_FORMAT_NV12);
-
     /* copy Y plane */
     src = GST_VIDEO_FRAME_PLANE_DATA (&vframe, 0);
     src_stride = GST_VIDEO_FRAME_PLANE_STRIDE (&vframe, 0);
@@ -1474,18 +1777,50 @@ gst_nv_base_enc_handle_frame (GstVideoEncoder * enc, GstVideoCodecFrame * frame)
       src += src_stride;
     }
 
-    /* copy UV plane */
-    src = GST_VIDEO_FRAME_PLANE_DATA (&vframe, 1);
-    src_stride = GST_VIDEO_FRAME_PLANE_STRIDE (&vframe, 1);
-    dest =
-        (guint8 *) in_buf_lock.bufferDataPtr +
-        GST_ROUND_UP_32 (GST_VIDEO_INFO_HEIGHT (&nvenc->input_info)) *
-        in_buf_lock.pitch;
-    dest_stride = in_buf_lock.pitch;
-    for (y = 0; y < GST_ROUND_UP_2 (height) / 2; ++y) {
-      memcpy (dest, src, width);
-      dest += dest_stride;
-      src += src_stride;
+    if (GST_VIDEO_FRAME_FORMAT (&vframe) == GST_VIDEO_FORMAT_NV12) {
+      /* copy UV plane */
+      src = GST_VIDEO_FRAME_PLANE_DATA (&vframe, 1);
+      src_stride = GST_VIDEO_FRAME_PLANE_STRIDE (&vframe, 1);
+      dest =
+          (guint8 *) in_buf_lock.bufferDataPtr +
+          GST_ROUND_UP_32 (height) * in_buf_lock.pitch;
+      dest_stride = in_buf_lock.pitch;
+      for (y = 0; y < GST_ROUND_UP_2 (height) / 2; ++y) {
+        memcpy (dest, src, width);
+        dest += dest_stride;
+        src += src_stride;
+      }
+    } else if (GST_VIDEO_FRAME_FORMAT (&vframe) == GST_VIDEO_FORMAT_I420) {
+      guint8 *dest_u, *dest_v;
+
+      dest_u = (guint8 *) in_buf_lock.bufferDataPtr +
+          GST_ROUND_UP_32 (height) * in_buf_lock.pitch;
+      dest_v = dest_u + ((GST_ROUND_UP_32 (height) / 2) *
+          (in_buf_lock.pitch / 2));
+      dest_stride = in_buf_lock.pitch / 2;
+
+      /* copy U plane */
+      src = GST_VIDEO_FRAME_PLANE_DATA (&vframe, 1);
+      src_stride = GST_VIDEO_FRAME_PLANE_STRIDE (&vframe, 1);
+      dest = dest_u;
+      for (y = 0; y < GST_ROUND_UP_2 (height) / 2; ++y) {
+        memcpy (dest, src, width / 2);
+        dest += dest_stride;
+        src += src_stride;
+      }
+
+      /* copy V plane */
+      src = GST_VIDEO_FRAME_PLANE_DATA (&vframe, 2);
+      src_stride = GST_VIDEO_FRAME_PLANE_STRIDE (&vframe, 2);
+      dest = dest_v;
+      for (y = 0; y < GST_ROUND_UP_2 (height) / 2; ++y) {
+        memcpy (dest, src, width / 2);
+        dest += dest_stride;
+        src += src_stride;
+      }
+    } else {
+      // FIXME: this only works for NV12 and I420
+      g_assert_not_reached ();
     }
 
     nv_ret = NvEncUnlockInputBuffer (nvenc->encoder, in_buf);
@@ -1528,6 +1863,10 @@ out:
 
 error:
   flow = GST_FLOW_ERROR;
+  if (state)
+    g_free (state);
+  if (input_buffer)
+    g_free (input_buffer);
   goto out;
 }
 
@@ -1582,6 +1921,12 @@ gst_nv_base_enc_flush (GstVideoEncoder * enc)
 #endif
 
 static void
+gst_nv_base_enc_schedule_reconfig (GstNvBaseEnc * nvenc)
+{
+  g_atomic_int_set (&nvenc->reconfig, TRUE);
+}
+
+static void
 gst_nv_base_enc_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
@@ -1590,6 +1935,35 @@ gst_nv_base_enc_set_property (GObject * object, guint prop_id,
   switch (prop_id) {
     case PROP_DEVICE_ID:
       nvenc->cuda_device_id = g_value_get_uint (value);
+      break;
+    case PROP_PRESET:
+      nvenc->preset_enum = g_value_get_enum (value);
+      nvenc->selected_preset = _nv_preset_to_guid (nvenc->preset_enum);
+      gst_nv_base_enc_schedule_reconfig (nvenc);
+      break;
+    case PROP_RC_MODE:
+      nvenc->rate_control_mode = g_value_get_enum (value);
+      gst_nv_base_enc_schedule_reconfig (nvenc);
+      break;
+    case PROP_QP_MIN:
+      nvenc->qp_min = g_value_get_int (value);
+      gst_nv_base_enc_schedule_reconfig (nvenc);
+      break;
+    case PROP_QP_MAX:
+      nvenc->qp_max = g_value_get_int (value);
+      gst_nv_base_enc_schedule_reconfig (nvenc);
+      break;
+    case PROP_QP_CONST:
+      nvenc->qp_const = g_value_get_int (value);
+      gst_nv_base_enc_schedule_reconfig (nvenc);
+      break;
+    case PROP_BITRATE:
+      nvenc->bitrate = g_value_get_uint (value);
+      gst_nv_base_enc_schedule_reconfig (nvenc);
+      break;
+    case PROP_GOP_SIZE:
+      nvenc->gop_size = g_value_get_int (value);
+      gst_nv_base_enc_schedule_reconfig (nvenc);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -1606,6 +1980,27 @@ gst_nv_base_enc_get_property (GObject * object, guint prop_id, GValue * value,
   switch (prop_id) {
     case PROP_DEVICE_ID:
       g_value_set_uint (value, nvenc->cuda_device_id);
+      break;
+    case PROP_PRESET:
+      g_value_set_enum (value, nvenc->preset_enum);
+      break;
+    case PROP_RC_MODE:
+      g_value_set_enum (value, nvenc->rate_control_mode);
+      break;
+    case PROP_QP_MIN:
+      g_value_set_int (value, nvenc->qp_min);
+      break;
+    case PROP_QP_MAX:
+      g_value_set_int (value, nvenc->qp_max);
+      break;
+    case PROP_QP_CONST:
+      g_value_set_int (value, nvenc->qp_const);
+      break;
+    case PROP_BITRATE:
+      g_value_set_uint (value, nvenc->bitrate);
+      break;
+    case PROP_GOP_SIZE:
+      g_value_set_int (value, nvenc->gop_size);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);

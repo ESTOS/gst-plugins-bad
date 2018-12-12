@@ -19,20 +19,20 @@
 
 /**
  * SECTION:element-pcapparse
+ * @title: pcapparse
  *
  * Extracts payloads from Ethernet-encapsulated IP packets.
  * Use #GstPcapParse:src-ip, #GstPcapParse:dst-ip,
  * #GstPcapParse:src-port and #GstPcapParse:dst-port to restrict which packets
  * should be included.
  *
- * <refsect2>
- * <title>Example pipelines</title>
+ * ## Example pipelines
  * |[
  * gst-launch-1.0 filesrc location=h264crasher.pcap ! pcapparse ! rtph264depay
  * ! ffdec_h264 ! fakesink
  * ]| Read from a pcap dump file using filesrc, extract the raw UDP packets,
  * depayload and decode them.
- * </refsect2>
+ *
  */
 
 /* TODO:
@@ -54,6 +54,13 @@
 #else
 #include <winsock2.h>
 #endif
+
+
+const guint GST_PCAPPARSE_MAGIC_MILLISECOND_NO_SWAP_ENDIAN = 0xa1b2c3d4;
+const guint GST_PCAPPARSE_MAGIC_NANOSECOND_NO_SWAP_ENDIAN = 0xa1b23c4d;
+const guint GST_PCAPPARSE_MAGIC_MILLISECOND_SWAP_ENDIAN = 0xd4c3b2a1;
+const guint GST_PCAPPARSE_MAGIC_NANOSECOND_SWAP_ENDIAN = 0x4d3cb2a1;
+
 
 enum
 {
@@ -138,10 +145,8 @@ gst_pcap_parse_class_init (GstPcapParseClass * klass)
           "Relative timestamp offset (ns) to apply (-1 = use absolute packet time)",
           -1, G_MAXINT64, -1, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sink_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&src_template));
+  gst_element_class_add_static_pad_template (element_class, &sink_template);
+  gst_element_class_add_static_pad_template (element_class, &src_template);
 
   element_class->change_state = gst_pcap_parse_change_state;
 
@@ -311,6 +316,7 @@ gst_pcap_parse_reset (GstPcapParse * self)
 {
   self->initialized = FALSE;
   self->swap_endian = FALSE;
+  self->nanosecond_timestamp = FALSE;
   self->cur_packet_size = -1;
   self->cur_ts = GST_CLOCK_TIME_NONE;
   self->base_ts = GST_CLOCK_TIME_NONE;
@@ -335,7 +341,9 @@ gst_pcap_parse_read_uint32 (GstPcapParse * self, const guint8 * p)
   }
 }
 
+#define ETH_MAC_ADDRESSES_LEN    12
 #define ETH_HEADER_LEN    14
+#define ETH_VLAN_HEADER_LEN    4
 #define SLL_HEADER_LEN    16
 #define IP_HEADER_MIN_LEN 20
 #define UDP_HEADER_LEN     8
@@ -365,9 +373,20 @@ gst_pcap_parse_scan_frame (GstPcapParse * self,
     case LINKTYPE_ETHER:
       if (buf_size < ETH_HEADER_LEN + IP_HEADER_MIN_LEN + UDP_HEADER_LEN)
         return FALSE;
-
-      eth_type = GUINT16_FROM_BE (*((guint16 *) (buf + 12)));
-      buf_ip = buf + ETH_HEADER_LEN;
+      eth_type = GUINT16_FROM_BE (*((guint16 *) (buf + ETH_MAC_ADDRESSES_LEN)));
+      /* check for vlan 802.1q header (4 bytes, with first two bytes equal to 0x8100)  */
+      if (eth_type == 0x8100) {
+        if (buf_size <
+            ETH_HEADER_LEN + ETH_VLAN_HEADER_LEN + IP_HEADER_MIN_LEN +
+            UDP_HEADER_LEN)
+          return FALSE;
+        eth_type =
+            GUINT16_FROM_BE (*((guint16 *) (buf + ETH_MAC_ADDRESSES_LEN +
+                    ETH_VLAN_HEADER_LEN)));
+        buf_ip = buf + ETH_HEADER_LEN + ETH_VLAN_HEADER_LEN;
+      } else {
+        buf_ip = buf + ETH_HEADER_LEN;
+      }
       break;
     case LINKTYPE_SLL:
       if (buf_size < SLL_HEADER_LEN + IP_HEADER_MIN_LEN + UDP_HEADER_LEN)
@@ -388,8 +407,12 @@ gst_pcap_parse_scan_frame (GstPcapParse * self,
       return FALSE;
   }
 
-  if (eth_type != 0x800)
+  if (eth_type != 0x800) {
+    GST_ERROR_OBJECT (self,
+        "Link type %d: Ethernet type %d is not supported; only type 0x800",
+        (gint) self->linktype, (gint) eth_type);
     return FALSE;
+  }
 
   b = *buf_ip;
   if (((b >> 4) & 0x0f) != 4)
@@ -537,7 +560,9 @@ gst_pcap_parse_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer)
         gst_adapter_unmap (self->adapter);
         gst_adapter_flush (self->adapter, 16);
 
-        self->cur_ts = ts_sec * GST_SECOND + ts_usec * GST_USECOND;
+        self->cur_ts =
+            ts_sec * GST_SECOND +
+            ts_usec * (self->nanosecond_timestamp ? 1 : GST_USECOND);
         self->cur_packet_size = incl_len;
       }
     } else {
@@ -552,14 +577,21 @@ gst_pcap_parse_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer)
 
       magic = *((guint32 *) data);
       major_version = *((guint16 *) (data + 4));
-      linktype = gst_pcap_parse_read_uint32 (self, data + 20);
+      linktype = *((guint32 *) (data + 20));
       gst_adapter_unmap (self->adapter);
 
-      if (magic == 0xa1b2c3d4) {
+      if (magic == GST_PCAPPARSE_MAGIC_MILLISECOND_NO_SWAP_ENDIAN ||
+          magic == GST_PCAPPARSE_MAGIC_NANOSECOND_NO_SWAP_ENDIAN) {
         self->swap_endian = FALSE;
-      } else if (magic == 0xd4c3b2a1) {
+        if (magic == GST_PCAPPARSE_MAGIC_NANOSECOND_NO_SWAP_ENDIAN)
+          self->nanosecond_timestamp = TRUE;
+      } else if (magic == GST_PCAPPARSE_MAGIC_MILLISECOND_SWAP_ENDIAN ||
+          magic == GST_PCAPPARSE_MAGIC_NANOSECOND_SWAP_ENDIAN) {
         self->swap_endian = TRUE;
-        major_version = major_version << 8 | major_version >> 8;
+        if (magic == GST_PCAPPARSE_MAGIC_NANOSECOND_SWAP_ENDIAN)
+          self->nanosecond_timestamp = TRUE;
+        major_version = GUINT16_SWAP_LE_BE (major_version);
+        linktype = GUINT32_SWAP_LE_BE (linktype);
       } else {
         GST_ELEMENT_ERROR (self, STREAM, WRONG_TYPE, (NULL),
             ("File is not a libpcap file, magic is %X", magic));

@@ -22,6 +22,7 @@
 
 /**
  * SECTION:element-x265enc
+ * @title: x265enc
  *
  * This element encodes raw video into H265 compressed data.
  *
@@ -54,8 +55,6 @@ enum
   PROP_SPEED_PRESET,
   PROP_TUNE
 };
-
-static GString *x265enc_defaults;
 
 #define PROP_BITRATE_DEFAULT            (2 * 1024)
 #define PROP_QP_DEFAULT                 -1
@@ -344,8 +343,6 @@ gst_x265_enc_class_init (GstX265EncClass * klass)
   GstElementClass *element_class;
   GstVideoEncoderClass *gstencoder_class;
 
-  x265enc_defaults = g_string_new ("");
-
   gobject_class = G_OBJECT_CLASS (klass);
   element_class = GST_ELEMENT_CLASS (klass);
   gstencoder_class = GST_VIDEO_ENCODER_CLASS (klass);
@@ -379,7 +376,8 @@ gst_x265_enc_class_init (GstX265EncClass * klass)
 
   g_object_class_install_property (gobject_class, PROP_OPTION_STRING,
       g_param_spec_string ("option-string", "Option string",
-          "String of x264 options (overridden by element properties)",
+          "String of x265 options (overridden by element properties)"
+          " in the format \"key1=value1:key2=value2\".",
           PROP_OPTION_STRING_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
@@ -403,10 +401,8 @@ gst_x265_enc_class_init (GstX265EncClass * klass)
       "x265enc", "Codec/Encoder/Video", "H265 Encoder",
       "Thijs Vermeir <thijs.vermeir@barco.com>");
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sink_factory));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&src_factory));
+  gst_element_class_add_static_pad_template (element_class, &sink_factory);
+  gst_element_class_add_static_pad_template (element_class, &src_factory);
 }
 
 /* initialize the new element
@@ -544,6 +540,8 @@ gst_x265_enc_finalize (GObject * object)
 
   gst_x265_enc_close_encoder (encoder);
 
+  g_string_free (encoder->option_string_prop, TRUE);
+
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
 
@@ -661,6 +659,7 @@ gst_x265_enc_init_encoder (GstX265Enc * encoder)
   encoder->x265param.sourceWidth = info->width;
   encoder->x265param.sourceHeight = info->height;
   if (info->par_d > 0) {
+    encoder->x265param.vui.aspectRatioIdc = X265_EXTENDED_SAR;
     encoder->x265param.vui.sarWidth = info->par_n;
     encoder->x265param.vui.sarHeight = info->par_d;
   }
@@ -1117,6 +1116,10 @@ gst_x265_enc_encode_frame (GstX265Enc * encoder, x265_picture * pic_in,
   for (i = 0; i < *i_nal; i++) {
     gst_buffer_fill (out_buf, offset, nal[i].payload, nal[i].sizeBytes);
     offset += nal[i].sizeBytes;
+  }
+
+  if (pic_out.sliceType == X265_TYPE_IDR || pic_out.sliceType == X265_TYPE_I) {
+    GST_VIDEO_CODEC_FRAME_SET_SYNC_POINT (frame);
   }
 
   frame->output_buffer = out_buf;
