@@ -54,8 +54,8 @@ dnl sets GST_LT_LDFLAGS
 AS_LIBTOOL(GST, 1404, 0, 1404)
 
 dnl *** required versions of GStreamer stuff ***
-GST_REQ=1.14.4
-GSTPB_REQ=1.14.4
+GST_REQ=1.5
+GSTPB_REQ=1.5
 
 dnl *** autotools stuff ****
 
@@ -211,7 +211,7 @@ AG_GST_PKG_CHECK_MODULES(GST_SDP, gstreamer-sdp-[$GST_API_VERSION], [$GST_REQ], 
 if test "x$HAVE_GST_GL" = "xyes"; then
 
   AC_MSG_CHECKING([GStreamer OpenGL window systems ...])
-  GST_GL_WINSYS=`$PKG_CONFIG --variable=gl_winsys gstreamer-gl-1.0`
+  GST_GL_WINSYS=`$PKG_CONFIG --variable=gl_winsys gstreamer-gl-[$GST_API_VERSION]`
   AC_MSG_RESULT([$GST_GL_WINSYS])
   GST_GL_HAVE_WINDOW_X11=""
   GST_GL_HAVE_WINDOW_WAYLAND=""
@@ -225,7 +225,7 @@ if test "x$HAVE_GST_GL" = "xyes"; then
   case "$GST_GL_WINSYS" in  *eagl*) GST_GL_HAVE_WINDOW_EAGL="1" ;; esac
 
   AC_MSG_CHECKING([GStreamer OpenGL platforms ...])
-  GST_GL_PLATFORMS=`$PKG_CONFIG --variable=gl_platforms gstreamer-gl-1.0`
+  GST_GL_PLATFORMS=`$PKG_CONFIG --variable=gl_platforms gstreamer-gl-[$GST_API_VERSION]`
   AC_MSG_RESULT([$GST_GL_PLATFORMS])
   GST_GL_HAVE_PLATFORM_GLX=""
   GST_GL_HAVE_PLATFORM_EGL=""
@@ -237,7 +237,7 @@ if test "x$HAVE_GST_GL" = "xyes"; then
   case "$GST_GL_PLATFORMS" in  *eagl*) GST_GL_HAVE_PLATFORM_EAGL="1" ;; esac
 
   AC_MSG_CHECKING([GStreamer OpenGL apis ...])
-  GST_GL_APIS=`$PKG_CONFIG --variable=gl_apis gstreamer-gl-1.0`
+  GST_GL_APIS=`$PKG_CONFIG --variable=gl_apis gstreamer-gl-[$GST_API_VERSION]`
   AC_MSG_RESULT([$GST_GL_APIS])
   GST_GL_HAVE_API_GLES2=""
   GST_GL_HAVE_API_GL=""
