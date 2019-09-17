@@ -466,6 +466,9 @@ process_buffer (GstDtlsDec * self, GstBuffer * buffer)
     return 0;
   }
 
+  if (map_info.data != 0 && map_info.size != 0)
+    GST_MEMDUMP_OBJECT (self, "dtlsrx", map_info.data, map_info.size);
+
   size =
       gst_dtls_connection_process (self->connection, map_info.data,
       map_info.size);

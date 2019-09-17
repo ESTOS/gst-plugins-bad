@@ -590,6 +590,9 @@ on_send_data (GstDtlsConnection * connection, gconstpointer data, gint length,
   GST_DEBUG_OBJECT (self, "sending data from %s with length %d",
       self->connection_id, length);
 
+  if (data != 0 && length != 0)
+    GST_MEMDUMP_OBJECT (self, "dtlstx", data, length);
+
   buffer = gst_buffer_new_wrapped (g_memdup (data, length), length);
 
   GST_TRACE_OBJECT (self, "send data: acquiring lock");
